@@ -6,28 +6,37 @@
 import AVFoundation
 import SwiftData
 import SwiftUI
+import UIKit
 
 struct ScannerView: View {
     /// Switch to the Create tab (or first tab) so the user always has an obvious way off the scanner.
     var onGoToCreate: () -> Void = {}
 
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.scenePhase) private var scenePhase
 
     @State private var authorization: AVAuthorizationStatus = AVCaptureDevice.authorizationStatus(for: .video)
     @State private var lastCode: String?
     @State private var torchOn = false
     @State private var showPasteAlert = false
     @State private var pasteCandidate: String?
+    /// Full decoded payload for copy / preview (plain-text QRs have no browser handoff).
+    @State private var lastScanPayload: String?
 
     var body: some View {
         ZStack {
             if authorization == .authorized {
                 MetadataScannerView { code, type in
+                    // Delegate queue is main; keep updates synchronous so `lastCode` deduping is reliable.
                     guard code != lastCode else { return }
                     lastCode = code
                     persistScan(code, type: type)
                     if let url = Self.safeOpenableURL(from: code) {
+                        lastScanPayload = nil
                         UIApplication.shared.open(url)
+                    } else {
+                        // Plain text / Wi‑Fi / contact / etc.: confirm what was read (no browser handoff).
+                        showScanFeedback(code)
                     }
                 }
                 // Keep the bottom safe area so the tab bar stays visible and tappable.
@@ -61,6 +70,43 @@ struct ScannerView: View {
                         .padding(12)
                         .background(.ultraThinMaterial, in: Capsule())
                         .padding(.bottom, 28)
+
+                    if let payload = lastScanPayload {
+                        VStack(alignment: .center, spacing: 10) {
+                            Text(Self.truncatedForDisplay(payload))
+                                .font(.caption)
+                                .multilineTextAlignment(.center)
+                                .lineLimit(6)
+                                .textSelection(.enabled)
+                                .frame(maxWidth: .infinity, alignment: .center)
+
+                            HStack(spacing: 12) {
+                                Button {
+                                    UIPasteboard.general.string = payload
+                                } label: {
+                                    Label("Copy", systemImage: "doc.on.doc")
+                                        .font(.subheadline.weight(.semibold))
+                                        .frame(maxWidth: .infinity)
+                                }
+                                .buttonStyle(.borderedProminent)
+                                .accessibilityHint("Copies the full scanned text to the clipboard")
+
+                                Button("Done") {
+                                    withAnimation {
+                                        lastScanPayload = nil
+                                        // Allow scanning the same QR again; `lastCode` was blocking re-detect.
+                                        lastCode = nil
+                                    }
+                                }
+                                .buttonStyle(.bordered)
+                            }
+                        }
+                        .padding(12)
+                        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12))
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 8)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
                 }
             } else {
                 ContentUnavailableView(
@@ -96,6 +142,14 @@ struct ScannerView: View {
                     }
                 }
             }
+            // Fresh session when opening Scan (tab switch or returning from Safari / another screen).
+            resetTransientScanState()
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .background {
+                // Leaving the app (e.g. URL opened in Safari) — don’t keep the old result sheet.
+                resetTransientScanState()
+            }
         }
         .alert("Save clipboard text?", isPresented: $showPasteAlert) {
             Button("Save to Library") {
@@ -108,6 +162,11 @@ struct ScannerView: View {
         } message: {
             Text(pasteCandidate ?? "")
         }
+    }
+
+    private func resetTransientScanState() {
+        lastScanPayload = nil
+        lastCode = nil
     }
 
     private func toggleTorch() {
@@ -148,11 +207,23 @@ struct ScannerView: View {
         try? modelContext.save()
     }
 
-    /// Only http(s) URLs are opened automatically.
+    /// Only well-formed http(s) URLs are opened automatically (plain-text QRs stay in-app).
     private static func safeOpenableURL(from string: String) -> URL? {
         let t = string.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let u = URL(string: t), let scheme = u.scheme?.lowercased() else { return nil }
         guard scheme == "http" || scheme == "https" else { return nil }
+        guard let host = u.host, !host.isEmpty else { return nil }
         return u
+    }
+
+    private func showScanFeedback(_ code: String) {
+        withAnimation(.easeInOut(duration: 0.2)) {
+            lastScanPayload = code
+        }
+    }
+
+    private static func truncatedForDisplay(_ code: String, maxLen: Int = 400) -> String {
+        guard code.count > maxLen else { return code }
+        return String(code.prefix(maxLen)) + "…"
     }
 }

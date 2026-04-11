@@ -20,7 +20,10 @@ struct MetadataScannerView: UIViewRepresentable {
         return v
     }
 
-    func updateUIView(_ uiView: PreviewView, context: Context) {}
+    func updateUIView(_ uiView: PreviewView, context: Context) {
+        // Keep handler fresh; avoid stale SwiftUI closures.
+        context.coordinator.onFound = onFound
+    }
 
     static func dismantleUIView(_ uiView: PreviewView, coordinator: Coordinator) {
         coordinator.stopSession()
@@ -29,7 +32,7 @@ struct MetadataScannerView: UIViewRepresentable {
     final class Coordinator: NSObject, AVCaptureMetadataOutputObjectsDelegate {
         private let session = AVCaptureSession()
         private let output = AVCaptureMetadataOutput()
-        private let onFound: (String, AVMetadataObject.ObjectType) -> Void
+        var onFound: (String, AVMetadataObject.ObjectType) -> Void
         private var attached = false
 
         init(onFound: @escaping (String, AVMetadataObject.ObjectType) -> Void) {
@@ -85,11 +88,10 @@ struct MetadataScannerView: UIViewRepresentable {
             from connection: AVCaptureConnection
         ) {
             guard let obj = metadataObjects.first as? AVMetadataMachineReadableCodeObject,
-                  let s = obj.stringValue,
+                  let s = obj.stringValue?.trimmingCharacters(in: .whitespacesAndNewlines),
                   !s.isEmpty
             else { return }
-            let type = obj.type
-            onFound(s, type)
+            onFound(s, obj.type)
         }
     }
 

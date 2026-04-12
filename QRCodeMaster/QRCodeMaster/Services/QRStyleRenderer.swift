@@ -10,6 +10,9 @@ import UIKit
 enum QRStyleRenderer {
     private static let context = CIContext(options: [.useSoftwareRenderer: false])
 
+    /// Share of the export square (min side) used by the QR matrix when a template is active — background margin ~14% per side (similar to common branded QR layouts).
+    private static let templateQRRelativeSide: CGFloat = 0.72
+
     static func render(
         message: String,
         options: QRStyleOptions,
@@ -28,21 +31,51 @@ enum QRStyleRenderer {
 
         let fg = options.foregroundUIColor()
         let bg = options.backgroundUIColor()
+        let templateId = options.backgroundTemplateId
+        let hasTemplate = templateId.map { !$0.isEmpty && $0.lowercased() != "none" } ?? false
 
-        let scale = outputPoints / CGFloat(n)
         let size = CGSize(width: outputPoints, height: outputPoints)
+        let bounds = CGRect(origin: .zero, size: size)
 
         UIGraphicsBeginImageContextWithOptions(size, false, 0)
         defer { UIGraphicsEndImageContext() }
         guard let ctx = UIGraphicsGetCurrentContext() else { return nil }
 
-        ctx.setFillColor(bg.cgColor)
-        ctx.fill(CGRect(origin: .zero, size: size))
+        if hasTemplate, let tpl = QRBackgroundTemplateCatalog.renderBackground(id: templateId, size: size) {
+            tpl.draw(in: bounds)
+        } else {
+            ctx.setFillColor(bg.cgColor)
+            ctx.fill(bounds)
+        }
+
+        // With a template: full-bleed background, QR centered; only dark modules drawn so light cells stay see-through.
+        let qrRect: CGRect
+        let moduleScale: CGFloat
+        if hasTemplate {
+            let side = min(bounds.width, bounds.height) * Self.templateQRRelativeSide
+            qrRect = CGRect(
+                x: bounds.midX - side / 2,
+                y: bounds.midY - side / 2,
+                width: side,
+                height: side
+            )
+            moduleScale = side / CGFloat(n)
+        } else {
+            qrRect = bounds
+            moduleScale = outputPoints / CGFloat(n)
+        }
+
+        let logoBackdrop = hasTemplate ? UIColor.white.withAlphaComponent(0.9) : bg
 
         for r in 0..<n {
             for c in 0..<n {
                 guard matrix[r][c] else { continue }
-                let rect = CGRect(x: CGFloat(c) * scale, y: CGFloat(r) * scale, width: scale, height: scale)
+                let rect = CGRect(
+                    x: qrRect.origin.x + CGFloat(c) * moduleScale,
+                    y: qrRect.origin.y + CGFloat(r) * moduleScale,
+                    width: moduleScale,
+                    height: moduleScale
+                )
                 let inFinder = Self.isFinderRegion(row: r, col: c, count: n)
                 if inFinder {
                     drawFinderModule(in: rect, context: ctx, color: fg, eye: options.eyeStyle, module: options.moduleShape)
@@ -53,7 +86,13 @@ enum QRStyleRenderer {
         }
 
         if let logo {
-            compositeLogo(logo, maxRelative: options.logoMaxRelativeSize, in: size, context: ctx, background: bg)
+            compositeLogo(
+                logo,
+                maxRelative: options.logoMaxRelativeSize,
+                placementRect: qrRect,
+                context: ctx,
+                background: logoBackdrop
+            )
         }
 
         if showWatermark {
@@ -135,10 +174,11 @@ enum QRStyleRenderer {
     private static func compositeLogo(
         _ logo: UIImage,
         maxRelative: Double,
-        in size: CGSize,
+        placementRect: CGRect,
         context ctx: CGContext,
         background: UIColor
     ) {
+        let size = placementRect.size
         let maxSide = min(size.width, size.height) * CGFloat(max(0.08, min(0.35, maxRelative)))
         let lw = logo.size.width
         let lh = logo.size.height
@@ -148,7 +188,10 @@ enum QRStyleRenderer {
             ? CGSize(width: maxSide, height: maxSide / aspect)
             : CGSize(width: maxSide * aspect, height: maxSide)
 
-        let origin = CGPoint(x: (size.width - box.width) / 2, y: (size.height - box.height) / 2)
+        let origin = CGPoint(
+            x: placementRect.midX - box.width / 2,
+            y: placementRect.midY - box.height / 2
+        )
         let logoRect = CGRect(origin: origin, size: box)
         let pad = maxSide * 0.12
         let bgRect = logoRect.insetBy(dx: -pad, dy: -pad)

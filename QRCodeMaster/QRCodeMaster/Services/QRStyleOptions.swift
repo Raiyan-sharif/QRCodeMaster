@@ -15,6 +15,8 @@ struct QRStyleOptions: Codable, Equatable, Sendable {
     var moduleShape: ModuleShape
     var eyeStyle: EyeStyle
     var frameId: String?
+    /// Built-in template id from `QRBackgroundTemplateCatalog`, or `nil` / `"none"` for a flat background.
+    var backgroundTemplateId: String?
     /// Max fraction of QR width for logo (0...0.35)
     var logoMaxRelativeSize: Double
 
@@ -37,6 +39,7 @@ struct QRStyleOptions: Codable, Equatable, Sendable {
         moduleShape: .square,
         eyeStyle: .square,
         frameId: nil,
+        backgroundTemplateId: nil,
         logoMaxRelativeSize: 0.22
     )
 

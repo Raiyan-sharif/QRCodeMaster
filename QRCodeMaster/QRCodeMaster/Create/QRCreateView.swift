@@ -107,6 +107,21 @@ struct QRCreateView: View {
             }
 
             Section {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 14) {
+                        ForEach(QRBackgroundTemplateCatalog.items) { item in
+                            qrTemplateChip(item: item)
+                        }
+                    }
+                    .padding(.vertical, 4)
+                }
+            } header: {
+                Text("Background template")
+            } footer: {
+                Text("Background fills the image; the QR uses about 72% of the square, centered, with see-through light modules so the template blends through. Choose a Foreground color that contrasts the art; use Q or H correction on busy backgrounds.")
+            }
+
+            Section {
                 if let rendered {
                     Image(uiImage: rendered)
                         .interpolation(.none)
@@ -172,6 +187,43 @@ struct QRCreateView: View {
         } message: {
             Text("Upgrade to save more items.")
         }
+    }
+
+    private func qrTemplateChip(item: QRBackgroundTemplateCatalog.Item) -> some View {
+        let selected = (style.backgroundTemplateId ?? "none").lowercased() == item.id.lowercased()
+        return Button {
+            style.backgroundTemplateId = item.id == "none" ? nil : item.id
+        } label: {
+            VStack(spacing: 6) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(Color(.secondarySystemFill))
+                        .frame(width: 76, height: 76)
+                    if item.id == "none" {
+                        Image(systemName: "rectangle.slash")
+                            .font(.title2)
+                            .foregroundStyle(.secondary)
+                    } else if let img = QRBackgroundTemplateCatalog.previewImage(id: item.id) {
+                        Image(uiImage: img)
+                            .resizable()
+                            .interpolation(.medium)
+                            .scaledToFill()
+                            .frame(width: 76, height: 76)
+                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                    }
+                }
+                Text(item.title)
+                    .font(.caption2)
+                    .lineLimit(1)
+                    .foregroundStyle(.primary)
+            }
+            .frame(width: 84)
+        }
+        .buttonStyle(.plain)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .strokeBorder(selected ? Color.accentColor : Color.clear, lineWidth: 2.5)
+        )
     }
 
     private func bindingHex(_ keyPath: WritableKeyPath<QRStyleOptions, String>, default def: String) -> Binding<Color> {

@@ -1,0 +1,70 @@
+{
+  "buildCommand" : {
+    "command" : "build",
+    "skipDependencies" : false,
+    "style" : "buildOnly"
+  },
+  "configuredTargets" : [
+    {
+      "guid" : "53b428067df815a66a27e654d02ba47732e5157ef36e2893834c8beac8e3ffb0"
+    }
+  ],
+  "containerPath" : "/Users/synesis/Documents/RaiyanGit/QRCodeMaster/QRCodeMaster/QRCodeMaster.xcodeproj",
+  "continueBuildingAfterErrors" : false,
+  "dependencyScope" : "workspace",
+  "enableIndexBuildArena" : false,
+  "hideShellScriptEnvironment" : false,
+  "parameters" : {
+    "action" : "build",
+    "activeArchitecture" : "undefined_arch",
+    "activeRunDestination" : {
+      "disableOnlyActiveArch" : true,
+      "platform" : "iphoneos",
+      "sdk" : "iphoneos26.2",
+      "sdkVariant" : "iphoneos",
+      "supportedArchitectures" : [
+        "armv4t",
+        "armv5",
+        "armv6",
+        "armv7",
+        "armv7f",
+        "armv7s",
+        "armv7k",
+        "arm64",
+        "arm64e"
+      ],
+      "targetArchitecture" : "undefined_arch"
+    },
+    "arenaInfo" : {
+      "buildIntermediatesPath" : "/Users/synesis/Documents/RaiyanGit/QRCodeMaster/QRCodeMaster/.derivedData/Build/Intermediates.noindex",
+      "buildProductsPath" : "/Users/synesis/Documents/RaiyanGit/QRCodeMaster/QRCodeMaster/.derivedData/Build/Products",
+      "derivedDataPath" : "/Users/synesis/Documents/RaiyanGit/QRCodeMaster/QRCodeMaster/.derivedData",
+      "indexDataStoreFolderPath" : "/Users/synesis/Documents/RaiyanGit/QRCodeMaster/QRCodeMaster/.derivedData/Index.noindex/DataStore",
+      "indexEnableDataStore" : true,
+      "indexPCHPath" : "/Users/synesis/Documents/RaiyanGit/QRCodeMaster/QRCodeMaster/.derivedData/Index.noindex/PrecompiledHeaders",
+      "pchPath" : "/Users/synesis/Documents/RaiyanGit/QRCodeMaster/QRCodeMaster/.derivedData/Build/Intermediates.noindex/PrecompiledHeaders"
+    },
+    "configurationName" : "Debug",
+    "overrides" : {
+      "commandLine" : {
+        "table" : {
+
+        }
+      },
+      "synthesized" : {
+        "table" : {
+          "ACTION" : "build",
+          "ENABLE_PREVIEWS" : "NO",
+          "ENABLE_XOJIT_PREVIEWS" : "YES",
+          "ONLY_ACTIVE_ARCH" : "YES"
+        }
+      }
+    }
+  },
+  "schemeCommand" : "launch",
+  "showNonLoggedProgress" : true,
+  "useDryRun" : false,
+  "useImplicitDependencies" : true,
+  "useLegacyBuildLocations" : false,
+  "useParallelTargets" : true
+}

@@ -12,10 +12,16 @@ struct MainTabView: View {
     var body: some View {
         TabView(selection: $selectedTab) {
             NavigationStack {
-                CreateRootView()
+                HomeView(selectedTab: $selectedTab)
             }
-            .tabItem { Label("Create", systemImage: "qrcode") }
+            .tabItem { Label("Home", systemImage: "house.fill") }
             .tag(0)
+
+            NavigationStack {
+                TemplateHomeView()
+            }
+            .tabItem { Label("Template", systemImage: "square.grid.2x2") }
+            .tag(1)
 
             NavigationStack {
                 ScannerView {
@@ -23,14 +29,15 @@ struct MainTabView: View {
                 }
             }
             .tabItem { Label("Scan", systemImage: "viewfinder") }
-            .tag(1)
+            .tag(2)
 
             NavigationStack {
                 LibraryView()
             }
-            .tabItem { Label("Library", systemImage: "folder") }
-            .tag(2)
+            .tabItem { Label("Drafts", systemImage: "folder.fill") }
+            .tag(3)
         }
+        .tint(Color(red: 0.2, green: 0.55, blue: 0.95))
     }
 }
 

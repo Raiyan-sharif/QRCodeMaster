@@ -1,0 +1,1 @@
+@rpath/QRCodeMaster.debug.dylib

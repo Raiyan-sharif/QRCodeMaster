@@ -1,0 +1,23 @@
+{
+  "/Users/synesis/Documents/RaiyanGit/QRCodeMaster/QRCodeMaster/QRCodeMaster/Services/QRPayloadEncoder.swift" : {
+    "const-values" : "/Users/synesis/Documents/RaiyanGit/QRCodeMaster/QRCodeMaster/.derivedData/Build/Intermediates.noindex/QRCodeMaster.build/Debug-iphoneos/QRCodeMaster.build/Objects-normal/arm64/QRPayloadEncoder.swiftconstvalues",
+    "dependencies" : "/Users/synesis/Documents/RaiyanGit/QRCodeMaster/QRCodeMaster/.derivedData/Build/Intermediates.noindex/QRCodeMaster.build/Debug-iphoneos/QRCodeMaster.build/Objects-normal/arm64/QRPayloadEncoder.d",
+    "diagnostics" : "/Users/synesis/Documents/RaiyanGit/QRCodeMaster/QRCodeMaster/.derivedData/Build/Intermediates.noindex/QRCodeMaster.build/Debug-iphoneos/QRCodeMaster.build/Objects-normal/arm64/QRPayloadEncoder.dia",
+    "object" : "/Users/synesis/Documents/RaiyanGit/QRCodeMaster/QRCodeMaster/.derivedData/Build/Intermediates.noindex/QRCodeMaster.build/Debug-iphoneos/QRCodeMaster.build/Objects-normal/arm64/QRPayloadEncoder.o",
+    "swift-dependencies" : "/Users/synesis/Documents/RaiyanGit/QRCodeMaster/QRCodeMaster/.derivedData/Build/Intermediates.noindex/QRCodeMaster.build/Debug-iphoneos/QRCodeMaster.build/Objects-normal/arm64/QRPayloadEncoder.swiftdeps"
+  },
+  "/Users/synesis/Documents/RaiyanGit/QRCodeMaster/QRCodeMaster/QRCodeMaster/Services/QRStyleOptions.swift" : {
+    "const-values" : "/Users/synesis/Documents/RaiyanGit/QRCodeMaster/QRCodeMaster/.derivedData/Build/Intermediates.noindex/QRCodeMaster.build/Debug-iphoneos/QRCodeMaster.build/Objects-normal/arm64/QRStyleOptions.swiftconstvalues",
+    "dependencies" : "/Users/synesis/Documents/RaiyanGit/QRCodeMaster/QRCodeMaster/.derivedData/Build/Intermediates.noindex/QRCodeMaster.build/Debug-iphoneos/QRCodeMaster.build/Objects-normal/arm64/QRStyleOptions.d",
+    "diagnostics" : "/Users/synesis/Documents/RaiyanGit/QRCodeMaster/QRCodeMaster/.derivedData/Build/Intermediates.noindex/QRCodeMaster.build/Debug-iphoneos/QRCodeMaster.build/Objects-normal/arm64/QRStyleOptions.dia",
+    "object" : "/Users/synesis/Documents/RaiyanGit/QRCodeMaster/QRCodeMaster/.derivedData/Build/Intermediates.noindex/QRCodeMaster.build/Debug-iphoneos/QRCodeMaster.build/Objects-normal/arm64/QRStyleOptions.o",
+    "swift-dependencies" : "/Users/synesis/Documents/RaiyanGit/QRCodeMaster/QRCodeMaster/.derivedData/Build/Intermediates.noindex/QRCodeMaster.build/Debug-iphoneos/QRCodeMaster.build/Objects-normal/arm64/QRStyleOptions.swiftdeps"
+  },
+  "/Users/synesis/Documents/RaiyanGit/QRCodeMaster/QRCodeMaster/QRCodeMaster/Services/QRStyleRenderer.swift" : {
+    "const-values" : "/Users/synesis/Documents/RaiyanGit/QRCodeMaster/QRCodeMaster/.derivedData/Build/Intermediates.noindex/QRCodeMaster.build/Debug-iphoneos/QRCodeMaster.build/Objects-normal/arm64/QRStyleRenderer.swiftconstvalues",
+    "dependencies" : "/Users/synesis/Documents/RaiyanGit/QRCodeMaster/QRCodeMaster/.derivedData/Build/Intermediates.noindex/QRCodeMaster.build/Debug-iphoneos/QRCodeMaster.build/Objects-normal/arm64/QRStyleRenderer.d",
+    "diagnostics" : "/Users/synesis/Documents/RaiyanGit/QRCodeMaster/QRCodeMaster/.derivedData/Build/Intermediates.noindex/QRCodeMaster.build/Debug-iphoneos/QRCodeMaster.build/Objects-normal/arm64/QRStyleRenderer.dia",
+    "object" : "/Users/synesis/Documents/RaiyanGit/QRCodeMaster/QRCodeMaster/.derivedData/Build/Intermediates.noindex/QRCodeMaster.build/Debug-iphoneos/QRCodeMaster.build/Objects-normal/arm64/QRStyleRenderer.o",
+    "swift-dependencies" : "/Users/synesis/Documents/RaiyanGit/QRCodeMaster/QRCodeMaster/.derivedData/Build/Intermediates.noindex/QRCodeMaster.build/Debug-iphoneos/QRCodeMaster.build/Objects-normal/arm64/QRStyleRenderer.swiftdeps"
+  }
+}

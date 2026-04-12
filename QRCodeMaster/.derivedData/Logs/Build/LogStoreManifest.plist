@@ -5,6 +5,49 @@
 	<key>logFormatVersion</key>
 	<integer>12</integer>
 	<key>logs</key>
-	<dict/>
+	<dict>
+		<key>3CEA8C8A-EFF8-4E17-A157-0AEC5295F54D</key>
+		<dict>
+			<key>className</key>
+			<string>IDECommandLineBuildLog</string>
+			<key>documentTypeString</key>
+			<string>&lt;nil&gt;</string>
+			<key>domainType</key>
+			<string>Xcode.IDEActivityLogDomainType.BuildLog</string>
+			<key>fileName</key>
+			<string>3CEA8C8A-EFF8-4E17-A157-0AEC5295F54D.xcactivitylog</string>
+			<key>hasPrimaryLog</key>
+			<true/>
+			<key>primaryObservable</key>
+			<dict>
+				<key>highLevelStatus</key>
+				<string>S</string>
+				<key>totalNumberOfAnalyzerIssues</key>
+				<integer>0</integer>
+				<key>totalNumberOfErrors</key>
+				<integer>0</integer>
+				<key>totalNumberOfTestFailures</key>
+				<integer>0</integer>
+				<key>totalNumberOfWarnings</key>
+				<integer>0</integer>
+			</dict>
+			<key>schemeIdentifier-containerName</key>
+			<string>QRCodeMaster project</string>
+			<key>schemeIdentifier-schemeName</key>
+			<string>QRCodeMaster</string>
+			<key>schemeIdentifier-sharedScheme</key>
+			<integer>1</integer>
+			<key>signature</key>
+			<string>Building project QRCodeMaster with scheme QRCodeMaster</string>
+			<key>timeStartedRecording</key>
+			<real>797678412.37419295</real>
+			<key>timeStoppedRecording</key>
+			<real>797678434.09764504</real>
+			<key>title</key>
+			<string>Building project QRCodeMaster with scheme QRCodeMaster</string>
+			<key>uniqueIdentifier</key>
+			<string>3CEA8C8A-EFF8-4E17-A157-0AEC5295F54D</string>
+		</dict>
+	</dict>
 </dict>
 </plist>

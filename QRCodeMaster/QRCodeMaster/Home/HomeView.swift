@@ -38,13 +38,7 @@ struct HomeView: View {
         .navigationBarHidden(true)
         .sheet(isPresented: $showSettings) {
             NavigationStack {
-                Text("Settings")
-                    .navigationTitle("Settings")
-                    .toolbar {
-                        ToolbarItem(placement: .cancellationAction) {
-                            Button("Done") { showSettings = false }
-                        }
-                    }
+                MineView()
             }
         }
         .alert("Coming soon", isPresented: Binding(

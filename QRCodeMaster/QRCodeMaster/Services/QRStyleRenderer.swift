@@ -80,8 +80,6 @@ enum QRStyleRenderer {
         }
 
         let logoBackdrop = hasTemplate ? UIColor.white.withAlphaComponent(0.9) : bg
-        // Use white for finder void when template is active so the eye is always readable.
-        let finderBg = hasTemplate ? UIColor.white : bg
 
         // Draw data modules — skip the three 7×7 finder regions entirely.
         for r in 0..<n {
@@ -106,7 +104,7 @@ enum QRStyleRenderer {
         ]
         for origin in finderOrigins {
             drawFinderPattern(at: origin, moduleScale: moduleScale,
-                              context: ctx, fg: fg, bg: finderBg, eye: options.eyeStyle)
+                              context: ctx, fg: fg, eye: options.eyeStyle)
         }
 
         // Logo overlay
@@ -165,20 +163,21 @@ enum QRStyleRenderer {
     // MARK: - Finder eye (complete unit, not module-by-module)
 
     /// Draws one complete 7×7 finder pattern as a styled unit.
+    /// The void ring is rendered as a transparent hole (even-odd path) so whatever
+    /// background — solid colour or template image — shows through naturally.
     /// `origin` is the top-left corner of the 7×7 block in canvas coordinates.
     private static func drawFinderPattern(
         at origin: CGPoint,
         moduleScale: CGFloat,
         context ctx: CGContext,
         fg: UIColor,
-        bg: UIColor,
         eye: QRStyleOptions.EyeStyle
     ) {
-        let size7  = moduleScale * 7          // outer square side
-        let size5  = moduleScale * 5          // void ring side (inset 1 module)
-        let size3  = moduleScale * 3          // inner fill side (inset 2 modules)
-        let inset1 = moduleScale              // offset to 5×5 rect
-        let inset2 = moduleScale * 2          // offset to 3×3 rect
+        let size7  = moduleScale * 7
+        let size5  = moduleScale * 5
+        let size3  = moduleScale * 3
+        let inset1 = moduleScale
+        let inset2 = moduleScale * 2
 
         let outer  = CGRect(x: origin.x,          y: origin.y,          width: size7, height: size7)
         let middle = CGRect(x: origin.x + inset1, y: origin.y + inset1, width: size5, height: size5)
@@ -186,30 +185,69 @@ enum QRStyleRenderer {
 
         switch eye {
         case .square:
-            fill(ctx, rect: outer,  color: fg, radius: 0)
-            fill(ctx, rect: middle, color: bg, radius: 0)
-            fill(ctx, rect: inner,  color: fg, radius: 0)
+            // Ring = outer rect with rectangular hole punched through (even-odd fill)
+            fillRing(ctx, outer: outer, void: middle, outerRadius: 0, voidRadius: 0, color: fg)
+            fill(ctx, rect: inner, color: fg, radius: 0)
 
         case .roundedLeaf:
-            // Use concentric radii so the dark ring is exactly 1 module wide everywhere
-            // (including at the corners). outerR drives the look; middleR = outerR − 1 module.
             let outerR  = size7 * 0.25
-            let middleR = max(0, outerR - moduleScale)  // concentric → uniform ring width
+            let middleR = max(0, outerR - moduleScale)
             let innerR  = size3 * 0.35
-            fill(ctx, rect: outer,  color: fg, radius: outerR)
-            fill(ctx, rect: middle, color: bg, radius: middleR)
-            fill(ctx, rect: inner,  color: fg, radius: innerR)
+            fillRing(ctx, outer: outer, void: middle, outerRadius: outerR, voidRadius: middleR, color: fg)
+            fill(ctx, rect: inner, color: fg, radius: innerR)
 
         case .circle:
-            fillEllipse(ctx, rect: outer,  color: fg)
-            fillEllipse(ctx, rect: middle, color: bg)
-            fillEllipse(ctx, rect: inner,  color: fg)
+            // Elliptical ring
+            fillEllipseRing(ctx, outer: outer, void: middle, color: fg)
+            fillEllipse(ctx, rect: inner, color: fg)
 
         case .squareCircle:
-            fill(ctx, rect: outer,  color: fg, radius: 0)
-            fill(ctx, rect: middle, color: bg, radius: 0)
+            fillRing(ctx, outer: outer, void: middle, outerRadius: 0, voidRadius: 0, color: fg)
             fillEllipse(ctx, rect: inner, color: fg)
         }
+    }
+
+    /// Draws a filled ring by subtracting the void shape from the outer shape using
+    /// the even-odd winding rule, leaving the void area completely unpainted so the
+    /// background (solid colour or template) shows through without any white layer.
+    private static func fillRing(
+        _ ctx: CGContext,
+        outer: CGRect, void: CGRect,
+        outerRadius: CGFloat, voidRadius: CGFloat,
+        color: UIColor
+    ) {
+        let outerPath = outerRadius > 0
+            ? UIBezierPath(roundedRect: outer, cornerRadius: outerRadius)
+            : UIBezierPath(rect: outer)
+        let voidPath = voidRadius > 0
+            ? UIBezierPath(roundedRect: void, cornerRadius: voidRadius)
+            : UIBezierPath(rect: void)
+        outerPath.append(voidPath)
+        outerPath.usesEvenOddFillRule = true
+
+        ctx.saveGState()
+        ctx.setFillColor(color.cgColor)
+        ctx.addPath(outerPath.cgPath)
+        ctx.fillPath(using: .evenOdd)
+        ctx.restoreGState()
+    }
+
+    /// Same as `fillRing` but for elliptical (circular) finder styles.
+    private static func fillEllipseRing(
+        _ ctx: CGContext,
+        outer: CGRect, void: CGRect,
+        color: UIColor
+    ) {
+        let outerPath = UIBezierPath(ovalIn: outer)
+        let voidPath  = UIBezierPath(ovalIn: void)
+        outerPath.append(voidPath)
+        outerPath.usesEvenOddFillRule = true
+
+        ctx.saveGState()
+        ctx.setFillColor(color.cgColor)
+        ctx.addPath(outerPath.cgPath)
+        ctx.fillPath(using: .evenOdd)
+        ctx.restoreGState()
     }
 
     // MARK: - Finder geometry helpers

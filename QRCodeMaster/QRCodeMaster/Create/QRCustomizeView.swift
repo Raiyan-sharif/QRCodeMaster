@@ -274,58 +274,166 @@ struct QRCustomizeView: View {
 
     private var colorPanel: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Picker("", selection: $colorTab) {
-                Text("Foreground").tag(ColorTab.foreground)
-                Text("Background").tag(ColorTab.background)
+            // Foreground / Background tab strip with X and ✓ controls
+            HStack(spacing: 0) {
+                Button { activePanel = nil } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 36, height: 36)
+                }
+                .buttonStyle(.plain)
+
+                Spacer()
+
+                HStack(spacing: 0) {
+                    colorTabButton("Foreground", tab: .foreground)
+                    colorTabButton("Background", tab: .background)
+                }
+
+                Spacer()
+
+                Button { activePanel = nil } label: {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(Color(red: 0.18, green: 0.72, blue: 0.65))
+                        .frame(width: 36, height: 36)
+                }
+                .buttonStyle(.plain)
             }
-            .pickerStyle(.segmented)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
+            .padding(.horizontal, 12)
+            .padding(.top, 8)
 
             Divider()
 
             if colorTab == .foreground {
+                // Foreground: only solid colour swatches
                 colorSwatchSection(
                     title: "Solid Color",
                     selectedHex: style.foregroundHex,
                     onSelect: { style.foregroundHex = $0 }
                 )
             } else {
+                // Background: image brand grid + solid colours
+                backgroundImageSection
+
+                Divider().padding(.leading, 16)
+
                 colorSwatchSection(
                     title: "Solid Color",
                     selectedHex: style.backgroundHex,
-                    onSelect: { style.backgroundHex = $0 }
+                    onSelect: {
+                        style.backgroundHex = $0
+                        style.brandBackgroundId = nil  // clear brand image when a solid colour is chosen
+                    }
                 )
             }
         }
     }
 
-    private func colorSwatchSection(title: String, selectedHex: String, onSelect: @escaping (String) -> Void) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(title)
+    private func colorTabButton(_ label: String, tab: ColorTab) -> some View {
+        Button { colorTab = tab } label: {
+            VStack(spacing: 4) {
+                Text(label)
+                    .font(.subheadline.weight(colorTab == tab ? .semibold : .regular))
+                    .foregroundStyle(colorTab == tab ? Color(red: 0.18, green: 0.72, blue: 0.65) : .secondary)
+                Rectangle()
+                    .fill(colorTab == tab ? Color(red: 0.18, green: 0.72, blue: 0.65) : Color.clear)
+                    .frame(height: 2)
+            }
+            .padding(.horizontal, 12)
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - Background image grid (brand templates)
+
+    private var backgroundImageSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Image")
                 .font(.subheadline.weight(.semibold))
                 .padding(.horizontal, 16)
                 .padding(.top, 10)
 
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10) {
-                    // None / clear
-                    Button {
-                        if colorTab == .foreground {
-                            style.foregroundHex = "#000000"
-                        } else {
-                            style.backgroundHex = "#FFFFFF"
-                        }
-                    } label: {
-                        ZStack {
-                            Circle()
-                                .fill(Color(.secondarySystemFill))
-                                .frame(width: 36, height: 36)
-                            Image(systemName: "circle.slash")
-                                .foregroundStyle(.secondary)
-                        }
+                LazyHGrid(
+                    rows: Array(repeating: GridItem(.fixed(64), spacing: 8), count: 3),
+                    spacing: 10
+                ) {
+                    // None
+                    brandCell(id: nil, sfSymbol: "circle.slash", startColor: Color(.secondarySystemFill), endColor: Color(.secondarySystemFill), iconColor: .secondary, name: "None")
+
+                    // Photo picker (custom image — future)
+                    PhotoPickerBrandCell(logoImage: $logoImage, logoItem: $logoItem)
+
+                    // Brand templates
+                    ForEach(QRBackgroundTemplateCatalog.brandItems) { brand in
+                        let startC = Color(uiColor: UIColor(hex: brand.startHex) ?? .gray)
+                        let endC   = Color(uiColor: UIColor(hex: brand.endHex)   ?? .black)
+                        let iconC: Color = brand.iconIsDark ? .black : .white
+                        brandCell(id: brand.id, sfSymbol: brand.sfSymbol,
+                                  startColor: startC, endColor: endC,
+                                  iconColor: iconC, name: brand.name)
                     }
-                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 8)
+            }
+            .frame(height: 64 * 3 + 8 * 2 + 2)  // 3 rows + 2 gaps + hairline
+        }
+    }
+
+    private func brandCell(
+        id: String?,
+        sfSymbol: String,
+        startColor: Color,
+        endColor: Color,
+        iconColor: Color,
+        name: String
+    ) -> some View {
+        let isSelected = (style.brandBackgroundId ?? "none") == (id ?? "none")
+        return Button {
+            style.brandBackgroundId = id
+        } label: {
+            ZStack {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(LinearGradient(colors: [startColor, endColor],
+                                        startPoint: .topLeading, endPoint: .bottomTrailing))
+                    .frame(width: 64, height: 64)
+                Image(systemName: sfSymbol)
+                    .font(.system(size: 22, weight: .medium))
+                    .foregroundStyle(iconColor)
+            }
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(isSelected ? Color(red: 0.18, green: 0.72, blue: 0.65) : Color.clear, lineWidth: 3)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func colorSwatchSection(title: String, selectedHex: String, onSelect: @escaping (String) -> Void) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if !title.isEmpty {
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                    .padding(.horizontal, 16)
+                    .padding(.top, 10)
+            }
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    // Rainbow / custom picker first
+                    ColorPicker("", selection: Binding(
+                        get: { Color(uiColor: UIColor(hex: selectedHex) ?? .black) },
+                        set: { c in
+                            var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+                            UIColor(c).getRed(&r, green: &g, blue: &b, alpha: &a)
+                            onSelect(String(format: "#%02X%02X%02X", Int(r * 255), Int(g * 255), Int(b * 255)))
+                        }
+                    ))
+                    .labelsHidden()
+                    .frame(width: 36, height: 36)
 
                     // Presets
                     ForEach(solidPresets.indices, id: \.self) { idx in
@@ -348,18 +456,6 @@ struct QRCustomizeView: View {
                         }
                         .buttonStyle(.plain)
                     }
-
-                    // Custom picker
-                    ColorPicker("", selection: Binding(
-                        get: { Color(uiColor: UIColor(hex: selectedHex) ?? .black) },
-                        set: { c in
-                            var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
-                            UIColor(c).getRed(&r, green: &g, blue: &b, alpha: &a)
-                            onSelect(String(format: "#%02X%02X%02X", Int(r * 255), Int(g * 255), Int(b * 255)))
-                        }
-                    ))
-                    .labelsHidden()
-                    .frame(width: 36, height: 36)
                 }
                 .padding(.horizontal, 16)
                 .padding(.bottom, 14)
@@ -602,6 +698,34 @@ struct QRCustomizeView: View {
         try? modelContext.save()
         savedImage = img
         navigateToSaved = true
+    }
+}
+
+// MARK: - Brand photo-picker cell
+
+private struct PhotoPickerBrandCell: View {
+    @Binding var logoImage: UIImage?
+    @Binding var logoItem: PhotosPickerItem?
+
+    var body: some View {
+        PhotosPicker(selection: $logoItem, matching: .images) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Color(.secondarySystemFill))
+                    .frame(width: 64, height: 64)
+                if let img = logoImage {
+                    Image(uiImage: img)
+                        .resizable().scaledToFill()
+                        .frame(width: 64, height: 64)
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                } else {
+                    Image(systemName: "photo.badge.plus")
+                        .font(.system(size: 22, weight: .medium))
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .buttonStyle(.plain)
     }
 }
 

@@ -13,16 +13,52 @@ enum QRBackgroundTemplateCatalog {
         let title: String
     }
 
+    /// Brand-themed background template shown in the Color › Background picker.
+    struct BrandItem: Identifiable, Hashable, Sendable {
+        let id: String          // used as backgroundTemplateId
+        let name: String
+        let sfSymbol: String    // SF Symbol for the preview icon
+        let startHex: String    // gradient top-left colour
+        let endHex: String      // gradient bottom-right colour
+        var iconIsDark: Bool = false // true when background is light (Snapchat yellow)
+    }
+
     static let items: [Item] = [
-        Item(id: "none", title: "None"),
-        Item(id: "sunset", title: "Sunset"),
-        Item(id: "ocean", title: "Ocean"),
-        Item(id: "forest", title: "Forest"),
-        Item(id: "paper", title: "Paper"),
-        Item(id: "grid", title: "Soft grid"),
-        Item(id: "dots", title: "Dots"),
+        Item(id: "none",     title: "None"),
+        Item(id: "sunset",   title: "Sunset"),
+        Item(id: "ocean",    title: "Ocean"),
+        Item(id: "forest",   title: "Forest"),
+        Item(id: "paper",    title: "Paper"),
+        Item(id: "grid",     title: "Soft grid"),
+        Item(id: "dots",     title: "Dots"),
         Item(id: "midnight", title: "Midnight"),
-        Item(id: "aurora", title: "Aurora"),
+        Item(id: "aurora",   title: "Aurora"),
+    ]
+
+    /// Brand-image backgrounds shown in Color › Background › Image section.
+    static let brandItems: [BrandItem] = [
+        .init(id: "brand_instagram", name: "Instagram",  sfSymbol: "camera.fill",                   startHex: "#f09433", endHex: "#bc1888"),
+        .init(id: "brand_whatsapp",  name: "WhatsApp",   sfSymbol: "bubble.left.fill",              startHex: "#25D366", endHex: "#075E54"),
+        .init(id: "brand_facebook",  name: "Facebook",   sfSymbol: "person.2.fill",                 startHex: "#3b5998", endHex: "#1d3461"),
+        .init(id: "brand_pinterest", name: "Pinterest",  sfSymbol: "pin.fill",                      startHex: "#E60023", endHex: "#8c0015"),
+        .init(id: "brand_viber",     name: "Viber",      sfSymbol: "phone.fill",                    startHex: "#7360f2", endHex: "#4a26ab"),
+        .init(id: "brand_snapchat",  name: "Snapchat",   sfSymbol: "camera.viewfinder",             startHex: "#FFFC00", endHex: "#FFD600", iconIsDark: true),
+        .init(id: "brand_skype",     name: "Skype",      sfSymbol: "video.fill",                    startHex: "#00aff0", endHex: "#0079c1"),
+        .init(id: "brand_spotify",   name: "Spotify",    sfSymbol: "music.note.list",               startHex: "#1DB954", endHex: "#0d7a34"),
+        .init(id: "brand_youtube",   name: "YouTube",    sfSymbol: "play.rectangle.fill",           startHex: "#FF0000", endHex: "#cc0000"),
+        .init(id: "brand_paypal",    name: "PayPal",     sfSymbol: "creditcard.fill",               startHex: "#009cde", endHex: "#003087"),
+        .init(id: "brand_tiktok",    name: "TikTok",     sfSymbol: "music.note",                    startHex: "#010101", endHex: "#2b2b2b"),
+        .init(id: "brand_line",      name: "LINE",       sfSymbol: "bubble.left.fill",              startHex: "#00C300", endHex: "#009000"),
+        .init(id: "brand_linkedin",  name: "LinkedIn",   sfSymbol: "briefcase.fill",                startHex: "#0077B5", endHex: "#004471"),
+        .init(id: "brand_wechat",    name: "WeChat",     sfSymbol: "ellipsis.bubble.fill",          startHex: "#07C160", endHex: "#059046"),
+        .init(id: "brand_x",         name: "X",          sfSymbol: "xmark.circle.fill",             startHex: "#14171A", endHex: "#000000"),
+        .init(id: "brand_bitcoin",   name: "Bitcoin",    sfSymbol: "bitcoinsign.circle.fill",       startHex: "#F7931A", endHex: "#c7680a"),
+        .init(id: "brand_ethereum",  name: "Ethereum",   sfSymbol: "diamond.fill",                  startHex: "#627EEA", endHex: "#3C5BD6"),
+        .init(id: "brand_bnb",       name: "BNB",        sfSymbol: "seal.fill",                     startHex: "#F3BA2F", endHex: "#c49610", iconIsDark: true),
+        .init(id: "brand_telegram",  name: "Telegram",   sfSymbol: "paperplane.fill",               startHex: "#2AABEE", endHex: "#007ABB"),
+        .init(id: "brand_messenger", name: "Messenger",  sfSymbol: "message.badge.filled.fill",     startHex: "#00B2FF", endHex: "#006AFF"),
+        .init(id: "brand_discord",   name: "Discord",    sfSymbol: "gamecontroller.fill",           startHex: "#5865F2", endHex: "#3943c0"),
+        .init(id: "brand_reddit",    name: "Reddit",     sfSymbol: "bubble.right.fill",             startHex: "#FF4500", endHex: "#cc3300"),
     ]
 
     /// `nil` or `"none"` means no template layer.
@@ -151,7 +187,20 @@ enum QRBackgroundTemplateCatalog {
                 end: CGPoint(x: size.width, y: 0)
             )
         default:
-            return nil
+            // Brand gradient templates
+            if let brand = brandItems.first(where: { $0.id == sid }),
+               let c1 = UIColor(hex: brand.startHex),
+               let c2 = UIColor(hex: brand.endHex) {
+                drawLinearGradient(
+                    ctx,
+                    in: bounds,
+                    colors: [c1, c2],
+                    start: CGPoint(x: 0, y: 0),
+                    end: CGPoint(x: size.width, y: size.height)
+                )
+            } else {
+                return nil
+            }
         }
 
         return UIGraphicsGetImageFromCurrentImageContext()

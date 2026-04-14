@@ -14,8 +14,11 @@ struct QRStyleOptions: Codable, Equatable, Sendable {
     var moduleShape: ModuleShape
     var eyeStyle: EyeStyle
     var frameId: String?
-    /// Built-in template id from `QRBackgroundTemplateCatalog`, or `nil`/`"none"` for flat background.
+    /// Built-in decorative template (sunset, ocean, …) — fills the full canvas.
     var backgroundTemplateId: String?
+    /// Brand colour background (brand_instagram, brand_whatsapp, …) — fills the QR area only.
+    /// Independent of `backgroundTemplateId` so both can be active at the same time.
+    var brandBackgroundId: String?
     /// Max fraction of QR width for logo (0…0.35)
     var logoMaxRelativeSize: Double
     /// Optional text label drawn below the QR in the exported image.
@@ -64,6 +67,7 @@ struct QRStyleOptions: Codable, Equatable, Sendable {
         eyeStyle: EyeStyle = .square,
         frameId: String? = nil,
         backgroundTemplateId: String? = nil,
+        brandBackgroundId: String? = nil,
         logoMaxRelativeSize: Double = 0.22,
         captionText: String = "",
         captionColorHex: String = "#000000"
@@ -75,6 +79,7 @@ struct QRStyleOptions: Codable, Equatable, Sendable {
         self.eyeStyle = eyeStyle
         self.frameId = frameId
         self.backgroundTemplateId = backgroundTemplateId
+        self.brandBackgroundId = brandBackgroundId
         self.logoMaxRelativeSize = logoMaxRelativeSize
         self.captionText = captionText
         self.captionColorHex = captionColorHex
@@ -89,36 +94,38 @@ struct QRStyleOptions: Codable, Equatable, Sendable {
 
     private enum CodingKeys: String, CodingKey {
         case foregroundHex, backgroundHex, errorCorrection, moduleShape, eyeStyle
-        case frameId, backgroundTemplateId, logoMaxRelativeSize
+        case frameId, backgroundTemplateId, brandBackgroundId, logoMaxRelativeSize
         case captionText, captionColorHex
     }
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        foregroundHex       = (try? c.decode(String.self,      forKey: .foregroundHex))       ?? "#000000"
-        backgroundHex       = (try? c.decode(String.self,      forKey: .backgroundHex))       ?? "#FFFFFF"
-        errorCorrection     = (try? c.decode(String.self,      forKey: .errorCorrection))     ?? "M"
-        moduleShape         = (try? c.decode(ModuleShape.self, forKey: .moduleShape))         ?? .square
-        eyeStyle            = (try? c.decode(EyeStyle.self,    forKey: .eyeStyle))            ?? .square
-        frameId             = try? c.decode(String.self,       forKey: .frameId)
-        backgroundTemplateId = try? c.decode(String.self,      forKey: .backgroundTemplateId)
-        logoMaxRelativeSize = (try? c.decode(Double.self,      forKey: .logoMaxRelativeSize)) ?? 0.22
-        captionText         = (try? c.decode(String.self,      forKey: .captionText))         ?? ""
-        captionColorHex     = (try? c.decode(String.self,      forKey: .captionColorHex))     ?? "#000000"
+        foregroundHex        = (try? c.decode(String.self,      forKey: .foregroundHex))       ?? "#000000"
+        backgroundHex        = (try? c.decode(String.self,      forKey: .backgroundHex))       ?? "#FFFFFF"
+        errorCorrection      = (try? c.decode(String.self,      forKey: .errorCorrection))     ?? "M"
+        moduleShape          = (try? c.decode(ModuleShape.self, forKey: .moduleShape))         ?? .square
+        eyeStyle             = (try? c.decode(EyeStyle.self,    forKey: .eyeStyle))            ?? .square
+        frameId              = try? c.decode(String.self,       forKey: .frameId)
+        backgroundTemplateId = try? c.decode(String.self,       forKey: .backgroundTemplateId)
+        brandBackgroundId    = try? c.decode(String.self,       forKey: .brandBackgroundId)
+        logoMaxRelativeSize  = (try? c.decode(Double.self,      forKey: .logoMaxRelativeSize)) ?? 0.22
+        captionText          = (try? c.decode(String.self,      forKey: .captionText))         ?? ""
+        captionColorHex      = (try? c.decode(String.self,      forKey: .captionColorHex))     ?? "#000000"
     }
 
     func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
-        try c.encode(foregroundHex,       forKey: .foregroundHex)
-        try c.encode(backgroundHex,       forKey: .backgroundHex)
-        try c.encode(errorCorrection,     forKey: .errorCorrection)
-        try c.encode(moduleShape,         forKey: .moduleShape)
-        try c.encode(eyeStyle,            forKey: .eyeStyle)
-        try c.encodeIfPresent(frameId,             forKey: .frameId)
-        try c.encodeIfPresent(backgroundTemplateId, forKey: .backgroundTemplateId)
-        try c.encode(logoMaxRelativeSize, forKey: .logoMaxRelativeSize)
-        try c.encode(captionText,         forKey: .captionText)
-        try c.encode(captionColorHex,     forKey: .captionColorHex)
+        try c.encode(foregroundHex,        forKey: .foregroundHex)
+        try c.encode(backgroundHex,        forKey: .backgroundHex)
+        try c.encode(errorCorrection,      forKey: .errorCorrection)
+        try c.encode(moduleShape,          forKey: .moduleShape)
+        try c.encode(eyeStyle,             forKey: .eyeStyle)
+        try c.encodeIfPresent(frameId,              forKey: .frameId)
+        try c.encodeIfPresent(backgroundTemplateId,  forKey: .backgroundTemplateId)
+        try c.encodeIfPresent(brandBackgroundId,     forKey: .brandBackgroundId)
+        try c.encode(logoMaxRelativeSize,  forKey: .logoMaxRelativeSize)
+        try c.encode(captionText,          forKey: .captionText)
+        try c.encode(captionColorHex,      forKey: .captionColorHex)
     }
 }
 

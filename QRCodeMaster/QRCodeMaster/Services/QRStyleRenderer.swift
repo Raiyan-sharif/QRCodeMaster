@@ -37,8 +37,12 @@ enum QRStyleRenderer {
 
         let fg = options.foregroundUIColor()
         let bg = options.backgroundUIColor()
-        let templateId = options.backgroundTemplateId
+        // Decorative template (sunset, ocean…) — full-canvas. Independent of brand background.
+        let templateId  = options.backgroundTemplateId
         let hasTemplate = templateId.map { !$0.isEmpty && $0.lowercased() != "none" } ?? false
+        // Brand colour background (brand_instagram…) — QR area only. Can coexist with decorative template.
+        let brandId     = options.brandBackgroundId
+        let hasBrand    = brandId.map { !$0.isEmpty && $0.lowercased() != "none" } ?? false
 
         let size = CGSize(width: outputPoints, height: outputPoints)
         let bounds = CGRect(origin: .zero, size: size)
@@ -47,23 +51,16 @@ enum QRStyleRenderer {
         defer { UIGraphicsEndImageContext() }
         guard let ctx = UIGraphicsGetCurrentContext() else { return nil }
 
-        // Background / template
-        if hasTemplate, let tpl = QRBackgroundTemplateCatalog.renderBackground(id: templateId, size: size) {
-            tpl.draw(in: bounds)
-        } else {
-            ctx.setFillColor(bg.cgColor)
-            ctx.fill(bounds)
-        }
-
-        // QR placement rect and module scale.
-        // For non-template rendering we add a 2-module quiet zone on every side so that
-        // finder patterns never touch the canvas edge and never visually merge with
-        // adjacent dark timing/data modules.
+        // QR placement rect and module scale — computed before background drawing so we can
+        // constrain the template gradient to the QR rect rather than the whole canvas.
         let moduleScale: CGFloat
         let qrRect: CGRect          // actual QR module area (logo centering, etc.)
         let matrixOrigin: CGPoint   // top-left pixel of module [0,0]
 
-        if hasTemplate {
+        // Use the inset "card" layout whenever either a decorative template or a brand
+        // background is active — both benefit from the centred 72 % rect.
+        let usesCardLayout = hasTemplate || hasBrand
+        if usesCardLayout {
             let side = min(bounds.width, bounds.height) * Self.templateQRRelativeSide
             qrRect       = CGRect(x: bounds.midX - side / 2, y: bounds.midY - side / 2,
                                   width: side, height: side)
@@ -79,7 +76,29 @@ enum QRStyleRenderer {
             matrixOrigin    = qrRect.origin
         }
 
-        let logoBackdrop = hasTemplate ? UIColor.white.withAlphaComponent(0.9) : bg
+        // ── Step 1: Full-canvas background ──────────────────────────────────────
+        // Decorative template fills the whole canvas; otherwise plain solid colour.
+        if hasTemplate,
+           let tpl = QRBackgroundTemplateCatalog.renderBackground(id: templateId, size: size) {
+            tpl.draw(in: bounds)
+        } else {
+            ctx.setFillColor(bg.cgColor)
+            ctx.fill(bounds)
+        }
+
+        // ── Step 2: Brand colour — QR card area only (independent layer) ─────
+        // Drawn on top of whatever is in Step 1, clipped to the inner QR rect.
+        if hasBrand,
+           let brandTpl = QRBackgroundTemplateCatalog.renderBackground(id: brandId, size: qrRect.size) {
+            ctx.saveGState()
+            let cardClip = UIBezierPath(roundedRect: qrRect, cornerRadius: qrRect.width * 0.05)
+            ctx.addPath(cardClip.cgPath)
+            ctx.clip()
+            brandTpl.draw(in: qrRect)
+            ctx.restoreGState()
+        }
+
+        let logoBackdrop = usesCardLayout ? UIColor.white.withAlphaComponent(0.9) : bg
 
         // Draw data modules — skip the three 7×7 finder regions entirely.
         for r in 0..<n {

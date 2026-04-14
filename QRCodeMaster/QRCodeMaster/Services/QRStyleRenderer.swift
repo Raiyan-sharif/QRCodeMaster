@@ -55,16 +55,28 @@ enum QRStyleRenderer {
             ctx.fill(bounds)
         }
 
-        // QR placement rect
-        let qrRect: CGRect
+        // QR placement rect and module scale.
+        // For non-template rendering we add a 2-module quiet zone on every side so that
+        // finder patterns never touch the canvas edge and never visually merge with
+        // adjacent dark timing/data modules.
         let moduleScale: CGFloat
+        let qrRect: CGRect          // actual QR module area (logo centering, etc.)
+        let matrixOrigin: CGPoint   // top-left pixel of module [0,0]
+
         if hasTemplate {
             let side = min(bounds.width, bounds.height) * Self.templateQRRelativeSide
-            qrRect = CGRect(x: bounds.midX - side / 2, y: bounds.midY - side / 2, width: side, height: side)
-            moduleScale = side / CGFloat(n)
+            qrRect       = CGRect(x: bounds.midX - side / 2, y: bounds.midY - side / 2,
+                                  width: side, height: side)
+            moduleScale  = side / CGFloat(n)
+            matrixOrigin = qrRect.origin
         } else {
-            qrRect = bounds
-            moduleScale = outputPoints / CGFloat(n)
+            let quietZone   = 2                                    // modules of white border each side
+            moduleScale     = outputPoints / CGFloat(n + quietZone * 2)
+            let qrOffset    = CGFloat(quietZone) * moduleScale
+            qrRect          = CGRect(x: qrOffset, y: qrOffset,
+                                     width: CGFloat(n) * moduleScale,
+                                     height: CGFloat(n) * moduleScale)
+            matrixOrigin    = qrRect.origin
         }
 
         let logoBackdrop = hasTemplate ? UIColor.white.withAlphaComponent(0.9) : bg
@@ -77,8 +89,8 @@ enum QRStyleRenderer {
                 guard matrix[r][c] else { continue }
                 guard !Self.isFinderRegion(row: r, col: c, count: n) else { continue }
                 let rect = CGRect(
-                    x: qrRect.origin.x + CGFloat(c) * moduleScale,
-                    y: qrRect.origin.y + CGFloat(r) * moduleScale,
+                    x: matrixOrigin.x + CGFloat(c) * moduleScale,
+                    y: matrixOrigin.y + CGFloat(r) * moduleScale,
                     width: moduleScale,
                     height: moduleScale
                 )
@@ -88,9 +100,9 @@ enum QRStyleRenderer {
 
         // Draw three complete finder-eye patterns as units.
         let finderOrigins = [
-            CGPoint(x: qrRect.origin.x,                              y: qrRect.origin.y),                              // TL
-            CGPoint(x: qrRect.origin.x + CGFloat(n - 7) * moduleScale, y: qrRect.origin.y),                              // TR
-            CGPoint(x: qrRect.origin.x,                              y: qrRect.origin.y + CGFloat(n - 7) * moduleScale), // BL
+            CGPoint(x: matrixOrigin.x,                                y: matrixOrigin.y),                                // TL
+            CGPoint(x: matrixOrigin.x + CGFloat(n - 7) * moduleScale, y: matrixOrigin.y),                                // TR
+            CGPoint(x: matrixOrigin.x,                                y: matrixOrigin.y + CGFloat(n - 7) * moduleScale), // BL
         ]
         for origin in finderOrigins {
             drawFinderPattern(at: origin, moduleScale: moduleScale,
@@ -179,9 +191,11 @@ enum QRStyleRenderer {
             fill(ctx, rect: inner,  color: fg, radius: 0)
 
         case .roundedLeaf:
-            let outerR  = size7 * 0.22
-            let middleR = size7 * 0.18
-            let innerR  = size3 * 0.22
+            // Use concentric radii so the dark ring is exactly 1 module wide everywhere
+            // (including at the corners). outerR drives the look; middleR = outerR − 1 module.
+            let outerR  = size7 * 0.25
+            let middleR = max(0, outerR - moduleScale)  // concentric → uniform ring width
+            let innerR  = size3 * 0.35
             fill(ctx, rect: outer,  color: fg, radius: outerR)
             fill(ctx, rect: middle, color: bg, radius: middleR)
             fill(ctx, rect: inner,  color: fg, radius: innerR)
@@ -192,7 +206,6 @@ enum QRStyleRenderer {
             fillEllipse(ctx, rect: inner,  color: fg)
 
         case .squareCircle:
-            // Square outer border + square void + circle inner
             fill(ctx, rect: outer,  color: fg, radius: 0)
             fill(ctx, rect: middle, color: bg, radius: 0)
             fillEllipse(ctx, rect: inner, color: fg)

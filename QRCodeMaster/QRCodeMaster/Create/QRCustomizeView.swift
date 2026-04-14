@@ -348,6 +348,8 @@ struct QRCustomizeView: View {
 
     // MARK: - Background image grid (brand templates)
 
+    private let brandCellSize: CGFloat = 64
+
     private var backgroundImageSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("Image")
@@ -357,57 +359,54 @@ struct QRCustomizeView: View {
 
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHGrid(
-                    rows: Array(repeating: GridItem(.fixed(64), spacing: 8), count: 3),
+                    rows: Array(repeating: GridItem(.fixed(brandCellSize), spacing: 8), count: 3),
                     spacing: 10
                 ) {
                     // None
-                    brandCell(id: nil, sfSymbol: "circle.slash", startColor: Color(.secondarySystemFill), endColor: Color(.secondarySystemFill), iconColor: .secondary, name: "None")
+                    noneCell
 
-                    // Photo picker (custom image — future)
+                    // Photo picker
                     PhotoPickerBrandCell(logoImage: $logoImage, logoItem: $logoItem)
 
                     // Brand templates
                     ForEach(QRBackgroundTemplateCatalog.brandItems) { brand in
-                        let startC = Color(uiColor: UIColor(hex: brand.startHex) ?? .gray)
-                        let endC   = Color(uiColor: UIColor(hex: brand.endHex)   ?? .black)
-                        let iconC: Color = brand.iconIsDark ? .black : .white
-                        brandCell(id: brand.id, sfSymbol: brand.sfSymbol,
-                                  startColor: startC, endColor: endC,
-                                  iconColor: iconC, name: brand.name)
+                        brandCell(brand)
                     }
                 }
                 .padding(.horizontal, 16)
                 .padding(.bottom, 8)
             }
-            .frame(height: 64 * 3 + 8 * 2 + 2)  // 3 rows + 2 gaps + hairline
+            .frame(height: brandCellSize * 3 + 8 * 2 + 2)
         }
     }
 
-    private func brandCell(
-        id: String?,
-        sfSymbol: String,
-        startColor: Color,
-        endColor: Color,
-        iconColor: Color,
-        name: String
-    ) -> some View {
-        let isSelected = (style.brandBackgroundId ?? "none") == (id ?? "none")
-        return Button {
-            style.brandBackgroundId = id
-        } label: {
+    private var noneCell: some View {
+        let isSelected = (style.brandBackgroundId ?? "none") == "none"
+        return Button { style.brandBackgroundId = nil } label: {
             ZStack {
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(LinearGradient(colors: [startColor, endColor],
-                                        startPoint: .topLeading, endPoint: .bottomTrailing))
-                    .frame(width: 64, height: 64)
-                Image(systemName: sfSymbol)
-                    .font(.system(size: 22, weight: .medium))
-                    .foregroundStyle(iconColor)
+                    .fill(Color(.secondarySystemFill))
+                    .frame(width: brandCellSize, height: brandCellSize)
+                Image(systemName: "circle.slash")
+                    .font(.system(size: 22))
+                    .foregroundStyle(Color(.tertiaryLabel))
             }
             .overlay(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
                     .stroke(isSelected ? Color(red: 0.18, green: 0.72, blue: 0.65) : Color.clear, lineWidth: 3)
             )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func brandCell(_ brand: QRBackgroundTemplateCatalog.BrandItem) -> some View {
+        let isSelected = style.brandBackgroundId == brand.id
+        return Button { style.brandBackgroundId = brand.id } label: {
+            BrandIconView(brand: brand, size: brandCellSize)
+                .overlay(
+                    RoundedRectangle(cornerRadius: brandCellSize * 0.22, style: .continuous)
+                        .stroke(isSelected ? Color(red: 0.18, green: 0.72, blue: 0.65) : Color.clear, lineWidth: 3)
+                )
         }
         .buttonStyle(.plain)
     }

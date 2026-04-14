@@ -77,30 +77,48 @@ enum QRStyleRenderer {
         }
 
         // ── Step 1: Full-canvas background ──────────────────────────────────────
-        // Decorative template fills the whole canvas; otherwise plain solid colour.
+        // Priority: decorative template > white (if brand active) > solid bg colour
         if hasTemplate,
            let tpl = QRBackgroundTemplateCatalog.renderBackground(id: templateId, size: size) {
             tpl.draw(in: bounds)
+        } else if hasBrand {
+            // No template — use clean white so the brand card stands out on a neutral canvas.
+            ctx.setFillColor(UIColor.white.cgColor)
+            ctx.fill(bounds)
         } else {
             ctx.setFillColor(bg.cgColor)
             ctx.fill(bounds)
         }
 
-        // ── Step 2: Brand colour — QR card area only (independent layer) ─────
-        // Drawn on top of whatever is in Step 1, clipped to the inner QR rect.
+        // ── Step 2: Brand gradient — inner QR card area only ─────────────────────
+        // Painted directly with CGContext so the clip to qrRect is guaranteed.
+        // Modules are drawn on top of this in the user's chosen foreground colour.
         if hasBrand,
-           let brandTpl = QRBackgroundTemplateCatalog.renderBackground(id: brandId, size: qrRect.size) {
+           let brand = QRBackgroundTemplateCatalog.brandItems.first(where: { $0.id == brandId }),
+           let c1 = UIColor(hex: brand.startHex),
+           let c2 = UIColor(hex: brand.endHex),
+           let space = CGColorSpace(name: CGColorSpace.sRGB),
+           let gradient = CGGradient(
+               colorsSpace: space,
+               colors: [c1.cgColor, c2.cgColor] as CFArray,
+               locations: [0.0, 1.0]
+           ) {
             ctx.saveGState()
             let cardClip = UIBezierPath(roundedRect: qrRect, cornerRadius: qrRect.width * 0.05)
             ctx.addPath(cardClip.cgPath)
             ctx.clip()
-            brandTpl.draw(in: qrRect)
+            ctx.drawLinearGradient(
+                gradient,
+                start: qrRect.origin,
+                end: CGPoint(x: qrRect.maxX, y: qrRect.maxY),
+                options: [.drawsBeforeStartLocation, .drawsAfterEndLocation]
+            )
             ctx.restoreGState()
         }
 
-        let logoBackdrop = usesCardLayout ? UIColor.white.withAlphaComponent(0.9) : bg
+        let logoBackdrop: UIColor = usesCardLayout ? UIColor.white.withAlphaComponent(0.9) : bg
 
-        // Draw data modules — skip the three 7×7 finder regions entirely.
+        // ── Draw data modules — skip the three 7×7 finder regions entirely ───────
         for r in 0..<n {
             for c in 0..<n {
                 guard matrix[r][c] else { continue }
@@ -115,11 +133,11 @@ enum QRStyleRenderer {
             }
         }
 
-        // Draw three complete finder-eye patterns as units.
+        // ── Draw three complete finder-eye patterns as units ──────────────────────
         let finderOrigins = [
-            CGPoint(x: matrixOrigin.x,                                y: matrixOrigin.y),                                // TL
-            CGPoint(x: matrixOrigin.x + CGFloat(n - 7) * moduleScale, y: matrixOrigin.y),                                // TR
-            CGPoint(x: matrixOrigin.x,                                y: matrixOrigin.y + CGFloat(n - 7) * moduleScale), // BL
+            CGPoint(x: matrixOrigin.x,                                y: matrixOrigin.y),
+            CGPoint(x: matrixOrigin.x + CGFloat(n - 7) * moduleScale, y: matrixOrigin.y),
+            CGPoint(x: matrixOrigin.x,                                y: matrixOrigin.y + CGFloat(n - 7) * moduleScale),
         ]
         for origin in finderOrigins {
             drawFinderPattern(at: origin, moduleScale: moduleScale,

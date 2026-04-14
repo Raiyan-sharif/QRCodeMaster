@@ -10,8 +10,10 @@ import UIKit
 enum QRStyleRenderer {
     private static let context = CIContext(options: [.useSoftwareRenderer: false])
 
-    /// Share of the export square (min side) used by the QR matrix when a template is active — background margin ~14% per side (similar to common branded QR layouts).
+    /// Share of the export square used by the QR matrix when a template is active.
     private static let templateQRRelativeSide: CGFloat = 0.72
+
+    // MARK: - Public
 
     static func render(
         message: String,
@@ -20,9 +22,13 @@ enum QRStyleRenderer {
         outputPoints: CGFloat = 512,
         showWatermark: Bool
     ) -> UIImage? {
-        guard let ci = QRGeneratorService.makeCIQRCode(message: message, correctionLevel: options.errorCorrection),
-              let scaled = scale(ci, toPixelWidth: Int(outputPoints)),
-              let tuple = QRGeneratorService.moduleMatrix(from: scaled, context: context)
+        // Extract the module matrix at NATIVE QR resolution (1 pixel per module).
+        // DO NOT scale before matrix extraction — scaling makes count = outputPoints
+        // instead of the real module count, which breaks the finder-region guard
+        // and causes eye styles to be ignored entirely.
+        guard
+            let ci = QRGeneratorService.makeCIQRCode(message: message, correctionLevel: options.errorCorrection),
+            let tuple = QRGeneratorService.moduleMatrix(from: ci, context: context)
         else { return nil }
 
         let matrix = tuple.matrix
@@ -41,6 +47,7 @@ enum QRStyleRenderer {
         defer { UIGraphicsEndImageContext() }
         guard let ctx = UIGraphicsGetCurrentContext() else { return nil }
 
+        // Background / template
         if hasTemplate, let tpl = QRBackgroundTemplateCatalog.renderBackground(id: templateId, size: size) {
             tpl.draw(in: bounds)
         } else {
@@ -48,17 +55,12 @@ enum QRStyleRenderer {
             ctx.fill(bounds)
         }
 
-        // With a template: full-bleed background, QR centered; only dark modules drawn so light cells stay see-through.
+        // QR placement rect
         let qrRect: CGRect
         let moduleScale: CGFloat
         if hasTemplate {
             let side = min(bounds.width, bounds.height) * Self.templateQRRelativeSide
-            qrRect = CGRect(
-                x: bounds.midX - side / 2,
-                y: bounds.midY - side / 2,
-                width: side,
-                height: side
-            )
+            qrRect = CGRect(x: bounds.midX - side / 2, y: bounds.midY - side / 2, width: side, height: side)
             moduleScale = side / CGFloat(n)
         } else {
             qrRect = bounds
@@ -66,35 +68,41 @@ enum QRStyleRenderer {
         }
 
         let logoBackdrop = hasTemplate ? UIColor.white.withAlphaComponent(0.9) : bg
+        // Use white for finder void when template is active so the eye is always readable.
+        let finderBg = hasTemplate ? UIColor.white : bg
 
+        // Draw data modules — skip the three 7×7 finder regions entirely.
         for r in 0..<n {
             for c in 0..<n {
                 guard matrix[r][c] else { continue }
+                guard !Self.isFinderRegion(row: r, col: c, count: n) else { continue }
                 let rect = CGRect(
                     x: qrRect.origin.x + CGFloat(c) * moduleScale,
                     y: qrRect.origin.y + CGFloat(r) * moduleScale,
                     width: moduleScale,
                     height: moduleScale
                 )
-                let inFinder = Self.isFinderRegion(row: r, col: c, count: n)
-                if inFinder {
-                    drawFinderModule(in: rect, context: ctx, color: fg, eye: options.eyeStyle, module: options.moduleShape)
-                } else {
-                    drawDataModule(in: rect, context: ctx, color: fg, shape: options.moduleShape)
-                }
+                drawDataModule(in: rect, context: ctx, color: fg, shape: options.moduleShape)
             }
         }
 
-        if let logo {
-            compositeLogo(
-                logo,
-                maxRelative: options.logoMaxRelativeSize,
-                placementRect: qrRect,
-                context: ctx,
-                background: logoBackdrop
-            )
+        // Draw three complete finder-eye patterns as units.
+        let finderOrigins = [
+            CGPoint(x: qrRect.origin.x,                              y: qrRect.origin.y),                              // TL
+            CGPoint(x: qrRect.origin.x + CGFloat(n - 7) * moduleScale, y: qrRect.origin.y),                              // TR
+            CGPoint(x: qrRect.origin.x,                              y: qrRect.origin.y + CGFloat(n - 7) * moduleScale), // BL
+        ]
+        for origin in finderOrigins {
+            drawFinderPattern(at: origin, moduleScale: moduleScale,
+                              context: ctx, fg: fg, bg: finderBg, eye: options.eyeStyle)
         }
 
+        // Logo overlay
+        if let logo {
+            compositeLogo(logo, maxRelative: options.logoMaxRelativeSize, placementRect: qrRect, context: ctx, background: logoBackdrop)
+        }
+
+        // Watermark
         if showWatermark {
             let text = "QRCodeMaster" as NSString
             let attrs: [NSAttributedString.Key: Any] = [
@@ -111,19 +119,11 @@ enum QRStyleRenderer {
         guard let composed = UIGraphicsGetImageFromCurrentImageContext()?.cgImage else { return nil }
         let ui = UIImage(cgImage: composed, scale: UIScreen.main.scale, orientation: .up)
 
-        return applyFrameIfNeeded(to: ui, frameId: options.frameId, fg: fg)
+        let framed = applyFrameIfNeeded(to: ui, frameId: options.frameId, fg: fg)
+        return applyCaption(to: framed, options: options)
     }
 
-    private static func scale(_ image: CIImage, toPixelWidth width: Int) -> CIImage? {
-        let e = image.extent.integral
-        guard e.width > 0 else { return nil }
-        let s = CGFloat(width) / e.width
-        return image.transformed(by: CGAffineTransform(scaleX: s, y: s))
-    }
-
-    private static func isFinderRegion(row: Int, col: Int, count: Int) -> Bool {
-        (row < 7 && col < 7) || (row < 7 && col >= count - 7) || (row >= count - 7 && col < 7)
-    }
+    // MARK: - Module drawing
 
     private static func drawDataModule(in rect: CGRect, context ctx: CGContext, color: UIColor, shape: QRStyleOptions.ModuleShape) {
         ctx.setFillColor(color.cgColor)
@@ -131,45 +131,99 @@ enum QRStyleRenderer {
         case .square:
             ctx.fill(rect)
         case .rounded:
-            let r = rect.width * 0.35
-            let path = UIBezierPath(roundedRect: rect.insetBy(dx: rect.width * 0.05, dy: rect.height * 0.05), cornerRadius: r).cgPath
-            ctx.addPath(path)
-            ctx.fillPath()
+            let path = UIBezierPath(roundedRect: rect.insetBy(dx: rect.width * 0.05, dy: rect.height * 0.05),
+                                    cornerRadius: rect.width * 0.35).cgPath
+            ctx.addPath(path); ctx.fillPath()
         case .dot:
             let d = min(rect.width, rect.height) * 0.78
-            let o = CGRect(
-                x: rect.midX - d / 2,
-                y: rect.midY - d / 2,
-                width: d,
-                height: d
-            )
-            ctx.fillEllipse(in: o)
+            ctx.fillEllipse(in: CGRect(x: rect.midX - d / 2, y: rect.midY - d / 2, width: d, height: d))
+        case .diamond:
+            let center = CGPoint(x: rect.midX, y: rect.midY)
+            let half = min(rect.width, rect.height) * 0.42
+            let path = CGMutablePath()
+            path.move(to: CGPoint(x: center.x, y: center.y - half))
+            path.addLine(to: CGPoint(x: center.x + half, y: center.y))
+            path.addLine(to: CGPoint(x: center.x, y: center.y + half))
+            path.addLine(to: CGPoint(x: center.x - half, y: center.y))
+            path.closeSubpath()
+            ctx.addPath(path); ctx.fillPath()
         }
     }
 
-    private static func drawFinderModule(
-        in rect: CGRect,
+    // MARK: - Finder eye (complete unit, not module-by-module)
+
+    /// Draws one complete 7×7 finder pattern as a styled unit.
+    /// `origin` is the top-left corner of the 7×7 block in canvas coordinates.
+    private static func drawFinderPattern(
+        at origin: CGPoint,
+        moduleScale: CGFloat,
         context ctx: CGContext,
-        color: UIColor,
-        eye: QRStyleOptions.EyeStyle,
-        module: QRStyleOptions.ModuleShape
+        fg: UIColor,
+        bg: UIColor,
+        eye: QRStyleOptions.EyeStyle
     ) {
+        let size7  = moduleScale * 7          // outer square side
+        let size5  = moduleScale * 5          // void ring side (inset 1 module)
+        let size3  = moduleScale * 3          // inner fill side (inset 2 modules)
+        let inset1 = moduleScale              // offset to 5×5 rect
+        let inset2 = moduleScale * 2          // offset to 3×3 rect
+
+        let outer  = CGRect(x: origin.x,          y: origin.y,          width: size7, height: size7)
+        let middle = CGRect(x: origin.x + inset1, y: origin.y + inset1, width: size5, height: size5)
+        let inner  = CGRect(x: origin.x + inset2, y: origin.y + inset2, width: size3, height: size3)
+
         switch eye {
         case .square:
-            drawDataModule(in: rect, context: ctx, color: color, shape: module)
+            fill(ctx, rect: outer,  color: fg, radius: 0)
+            fill(ctx, rect: middle, color: bg, radius: 0)
+            fill(ctx, rect: inner,  color: fg, radius: 0)
+
         case .roundedLeaf:
-            ctx.setFillColor(color.cgColor)
-            let inset = rect.insetBy(dx: rect.width * 0.06, dy: rect.height * 0.06)
-            let path = UIBezierPath(roundedRect: inset, cornerRadius: rect.width * 0.42).cgPath
-            ctx.addPath(path)
-            ctx.fillPath()
+            let outerR  = size7 * 0.22
+            let middleR = size7 * 0.18
+            let innerR  = size3 * 0.22
+            fill(ctx, rect: outer,  color: fg, radius: outerR)
+            fill(ctx, rect: middle, color: bg, radius: middleR)
+            fill(ctx, rect: inner,  color: fg, radius: innerR)
+
         case .circle:
-            ctx.setFillColor(color.cgColor)
-            let d = min(rect.width, rect.height) * 0.88
-            let o = CGRect(x: rect.midX - d / 2, y: rect.midY - d / 2, width: d, height: d)
-            ctx.fillEllipse(in: o)
+            fillEllipse(ctx, rect: outer,  color: fg)
+            fillEllipse(ctx, rect: middle, color: bg)
+            fillEllipse(ctx, rect: inner,  color: fg)
+
+        case .squareCircle:
+            // Square outer border + square void + circle inner
+            fill(ctx, rect: outer,  color: fg, radius: 0)
+            fill(ctx, rect: middle, color: bg, radius: 0)
+            fillEllipse(ctx, rect: inner, color: fg)
         }
     }
+
+    // MARK: - Finder geometry helpers
+
+    private static func isFinderRegion(row: Int, col: Int, count: Int) -> Bool {
+        (row < 7 && col < 7) || (row < 7 && col >= count - 7) || (row >= count - 7 && col < 7)
+    }
+
+    // MARK: - Low-level draw helpers
+
+    private static func fill(_ ctx: CGContext, rect: CGRect, color: UIColor, radius: CGFloat) {
+        ctx.setFillColor(color.cgColor)
+        if radius > 0 {
+            let path = UIBezierPath(roundedRect: rect, cornerRadius: radius).cgPath
+            ctx.addPath(path)
+            ctx.fillPath()
+        } else {
+            ctx.fill(rect)
+        }
+    }
+
+    private static func fillEllipse(_ ctx: CGContext, rect: CGRect, color: UIColor) {
+        ctx.setFillColor(color.cgColor)
+        ctx.fillEllipse(in: rect)
+    }
+
+    // MARK: - Logo
 
     private static func compositeLogo(
         _ logo: UIImage,
@@ -180,18 +234,13 @@ enum QRStyleRenderer {
     ) {
         let size = placementRect.size
         let maxSide = min(size.width, size.height) * CGFloat(max(0.08, min(0.35, maxRelative)))
-        let lw = logo.size.width
-        let lh = logo.size.height
+        let lw = logo.size.width; let lh = logo.size.height
         guard lw > 0, lh > 0 else { return }
         let aspect = lw / lh
         let box: CGSize = aspect >= 1
             ? CGSize(width: maxSide, height: maxSide / aspect)
             : CGSize(width: maxSide * aspect, height: maxSide)
-
-        let origin = CGPoint(
-            x: placementRect.midX - box.width / 2,
-            y: placementRect.midY - box.height / 2
-        )
+        let origin = CGPoint(x: placementRect.midX - box.width / 2, y: placementRect.midY - box.height / 2)
         let logoRect = CGRect(origin: origin, size: box)
         let pad = maxSide * 0.12
         let bgRect = logoRect.insetBy(dx: -pad, dy: -pad)
@@ -200,13 +249,12 @@ enum QRStyleRenderer {
         ctx.setStrokeColor(UIColor.black.withAlphaComponent(0.08).cgColor)
         ctx.setLineWidth(max(1, maxSide * 0.02))
         let path = UIBezierPath(roundedRect: bgRect, cornerRadius: maxSide * 0.12).cgPath
-        ctx.addPath(path)
-        ctx.fillPath()
-        ctx.addPath(path)
-        ctx.strokePath()
-
+        ctx.addPath(path); ctx.fillPath()
+        ctx.addPath(path); ctx.strokePath()
         logo.draw(in: logoRect)
     }
+
+    // MARK: - Frame
 
     private static func applyFrameIfNeeded(to image: UIImage, frameId: String?, fg: UIColor) -> UIImage {
         guard let frameId, !frameId.isEmpty else { return image }
@@ -215,17 +263,40 @@ enum QRStyleRenderer {
         UIGraphicsBeginImageContextWithOptions(sz, false, image.scale)
         defer { UIGraphicsEndImageContext() }
         guard let c = UIGraphicsGetCurrentContext() else { return image }
-
-        c.setFillColor(UIColor.secondarySystemBackground.cgColor)
-        c.fill(CGRect(origin: .zero, size: sz))
-
+        c.setFillColor(UIColor.secondarySystemBackground.cgColor); c.fill(CGRect(origin: .zero, size: sz))
         let border = UIBezierPath(roundedRect: CGRect(x: 8, y: 8, width: sz.width - 16, height: sz.height - 16), cornerRadius: 16)
-        c.setStrokeColor(fg.withAlphaComponent(0.25).cgColor)
-        c.setLineWidth(4)
-        c.addPath(border.cgPath)
-        c.strokePath()
-
+        c.setStrokeColor(fg.withAlphaComponent(0.25).cgColor); c.setLineWidth(4)
+        c.addPath(border.cgPath); c.strokePath()
         image.draw(at: CGPoint(x: pad, y: pad))
         return UIGraphicsGetImageFromCurrentImageContext() ?? image
     }
+
+    // MARK: - Caption
+
+    private static func applyCaption(to image: UIImage, options: QRStyleOptions) -> UIImage {
+        let caption = options.captionText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !caption.isEmpty else { return image }
+
+        let font = UIFont.systemFont(ofSize: max(14, image.size.width * 0.05), weight: .medium)
+        let captionColor = UIColor(hex: options.captionColorHex) ?? .black
+        let attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: captionColor]
+        let textSize = (caption as NSString).size(withAttributes: attrs)
+        let vPad: CGFloat = max(10, image.size.height * 0.025)
+        let textAreaH = textSize.height + vPad * 2
+
+        let totalSize = CGSize(width: image.size.width, height: image.size.height + textAreaH)
+        UIGraphicsBeginImageContextWithOptions(totalSize, false, image.scale)
+        defer { UIGraphicsEndImageContext() }
+
+        UIColor.white.setFill()
+        UIRectFill(CGRect(origin: .zero, size: totalSize))
+        image.draw(at: .zero)
+
+        let tx = (image.size.width - textSize.width) / 2
+        let ty = image.size.height + vPad
+        (caption as NSString).draw(at: CGPoint(x: tx, y: ty), withAttributes: attrs)
+
+        return UIGraphicsGetImageFromCurrentImageContext() ?? image
+    }
+
 }

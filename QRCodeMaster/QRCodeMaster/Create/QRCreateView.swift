@@ -3,290 +3,287 @@
 //  QRCodeMaster
 //
 
-import PhotosUI
 import SwiftData
 import SwiftUI
 
 struct QRCreateView: View {
-    @Environment(\.modelContext) private var modelContext
-    @Environment(\.featureFlags) private var features
+    /// Pre-selected style (e.g. template chosen from TemplateHomeView).
+    var initialStyle: QRStyleOptions = .default
 
     @State private var payloadType: QRPayloadType = .text
     @State private var textPayload = ""
-    @State private var wifi = WiFiPayload(ssid: "", password: "", security: .wpa, hidden: false)
+    @State private var wifi    = WiFiPayload(ssid: "", password: "", security: .wpa, hidden: false)
     @State private var contact = ContactPayload(fullName: "", phone: "", email: "", organization: "")
-    @State private var sms = SMSPayload(phone: "", body: "")
-    @State private var style = QRStyleOptions.default
-    @State private var logoItem: PhotosPickerItem?
-    @State private var logoImage: UIImage?
-    @State private var rendered: UIImage?
-    @State private var showShare = false
-    @State private var saveError: String?
-    @State private var showSaveError = false
-    @State private var showLimitAlert = false
+    @State private var sms     = SMSPayload(phone: "", body: "")
+
+    @State private var navigateToCustomize = false
+
+    // MARK: - Computed payload
 
     private var encodedPayload: String {
-        QRPayloadEncoder.encode(
-            type: payloadType,
-            text: textPayload,
-            wifi: wifi,
-            contact: contact,
-            sms: sms
+        QRPayloadEncoder.encode(type: payloadType, text: textPayload, wifi: wifi, contact: contact, sms: sms)
+    }
+
+    private var canCreate: Bool { !encodedPayload.isEmpty }
+
+    // MARK: - Body
+
+    var body: some View {
+        VStack(spacing: 0) {
+            contentCard
+                .padding(.horizontal, 20)
+                .padding(.top, 12)
+
+            // Character-count hint
+            if let threshold = payloadType.textWarningThreshold {
+                Text("The QR Code will be difficult to recognize when the content exceeds \(threshold) characters")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 24)
+                    .padding(.top, 8)
+            }
+
+            Spacer(minLength: 12)
+
+            typeGrid
+                .padding(.bottom, 8)
+        }
+        .background(Color(.systemGroupedBackground))
+        .navigationTitle("Create")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button("Create") { navigateToCustomize = true }
+                    .buttonStyle(.borderedProminent)
+                    .tint(Color(red: 0.18, green: 0.72, blue: 0.65))
+                    .disabled(!canCreate)
+            }
+        }
+        .navigationDestination(isPresented: $navigateToCustomize) {
+            QRCustomizeView(
+                payload: encodedPayload,
+                payloadType: payloadType,
+                initialStyle: initialStyle
+            )
+        }
+    }
+
+    // MARK: - Content card
+
+    private var contentCard: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(payloadType.title)
+                .font(.callout.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 16)
+                .padding(.top, 14)
+                .padding(.bottom, 8)
+
+            Divider()
+                .padding(.horizontal, 16)
+
+            inputFields
+                .padding(.horizontal, 16)
+                .padding(.bottom, 14)
+        }
+        .frame(maxWidth: .infinity, minHeight: 200)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(Color(.systemBackground))
+                .shadow(color: .black.opacity(0.06), radius: 8, x: 0, y: 3)
         )
     }
 
-    var body: some View {
-        Form {
-            Section("Content") {
-                Picker("Type", selection: $payloadType) {
-                    ForEach(QRPayloadType.allCases) { t in
-                        Text(t.title).tag(t)
+    @ViewBuilder
+    private var inputFields: some View {
+        switch payloadType {
+        case .text, .url, .instagram, .facebook, .whatsapp, .youtube:
+            TextEditor(text: $textPayload)
+                .font(.body)
+                .scrollContentBackground(.hidden)
+                .frame(minHeight: 130)
+                .overlay(alignment: .topLeading) {
+                    if textPayload.isEmpty {
+                        Text(payloadType.inputPlaceholder)
+                            .font(.body)
+                            .foregroundStyle(Color(.placeholderText))
+                            .padding(.top, 8)
+                            .allowsHitTesting(false)
                     }
                 }
-                switch payloadType {
-                case .text, .url:
-                    TextField(payloadType == .url ? "https://example.com" : "Text", text: $textPayload, axis: .vertical)
-                        .lineLimit(3...8)
-                case .wifi:
-                    TextField("Network name (SSID)", text: $wifi.ssid)
-                    SecureField("Password", text: $wifi.password)
-                    Picker("Security", selection: $wifi.security) {
+                .padding(.top, 8)
+
+        case .wifi:
+            VStack(spacing: 0) {
+                inputRow(label: "Network (SSID)", binding: $wifi.ssid, placeholder: "My Network")
+                Divider()
+                inputRow(label: "Password", binding: $wifi.password, placeholder: "••••••••", secure: true)
+                Divider()
+                HStack {
+                    Text("Security")
+                        .foregroundStyle(.secondary)
+                        .font(.subheadline)
+                    Spacer()
+                    Picker("", selection: $wifi.security) {
                         ForEach(WiFiPayload.WiFiSecurity.allCases) { s in
                             Text(s.displayName).tag(s)
                         }
                     }
-                    Toggle("Hidden network", isOn: $wifi.hidden)
-                case .contact:
-                    TextField("Name", text: $contact.fullName)
-                    TextField("Phone", text: $contact.phone)
-                        .keyboardType(.phonePad)
-                    TextField("Email", text: $contact.email)
-                        .keyboardType(.emailAddress)
-                        .textInputAutocapitalization(.never)
-                    TextField("Organization", text: $contact.organization)
-                case .sms:
-                    TextField("Phone number", text: $sms.phone)
-                        .keyboardType(.phonePad)
-                    TextField("Message (optional)", text: $sms.body, axis: .vertical)
-                        .lineLimit(2...6)
+                    .labelsHidden()
                 }
+                .padding(.vertical, 10)
+                Divider()
+                Toggle("Hidden network", isOn: $wifi.hidden)
+                    .font(.subheadline)
+                    .padding(.vertical, 10)
             }
+            .padding(.top, 4)
 
-            Section("Style") {
-                ColorPicker("Foreground", selection: bindingHex(\.foregroundHex, default: "#000000"))
-                ColorPicker("Background", selection: bindingHex(\.backgroundHex, default: "#FFFFFF"))
-                Picker("Error correction", selection: $style.errorCorrection) {
-                    Text("L ~7%").tag("L")
-                    Text("M ~15%").tag("M")
-                    Text("Q ~25%").tag("Q")
-                    Text("H ~30%").tag("H")
-                }
-                Picker("Module shape", selection: $style.moduleShape) {
-                    Text("Square").tag(QRStyleOptions.ModuleShape.square)
-                    Text("Rounded").tag(QRStyleOptions.ModuleShape.rounded)
-                    Text("Dot").tag(QRStyleOptions.ModuleShape.dot)
-                }
-                Picker("Finder eyes", selection: $style.eyeStyle) {
-                    Text("Square").tag(QRStyleOptions.EyeStyle.square)
-                    Text("Rounded").tag(QRStyleOptions.EyeStyle.roundedLeaf)
-                    Text("Circle").tag(QRStyleOptions.EyeStyle.circle)
-                }
-                Toggle("Decorative frame", isOn: Binding(
-                    get: { style.frameId != nil },
-                    set: { style.frameId = $0 ? "default" : nil }
-                ))
-                PhotosPicker(selection: $logoItem, matching: .images, photoLibrary: .shared()) {
-                    Label(logoImage == nil ? "Add logo" : "Change logo", systemImage: "photo")
-                }
-                if logoImage != nil {
-                    Button("Remove logo", role: .destructive) {
-                        logoImage = nil
-                        logoItem = nil
-                    }
-                }
+        case .contact:
+            VStack(spacing: 0) {
+                inputRow(label: "Name",         binding: $contact.fullName,    placeholder: "Full Name")
+                Divider()
+                inputRow(label: "Phone",        binding: $contact.phone,       placeholder: "+1 555 000 0000", keyboard: .phonePad)
+                Divider()
+                inputRow(label: "Email",        binding: $contact.email,       placeholder: "email@example.com", keyboard: .emailAddress)
+                Divider()
+                inputRow(label: "Organisation", binding: $contact.organization, placeholder: "Company")
             }
+            .padding(.top, 4)
 
-            Section {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 14) {
-                        ForEach(QRBackgroundTemplateCatalog.items) { item in
-                            qrTemplateChip(item: item)
-                        }
-                    }
-                    .padding(.vertical, 4)
-                }
-            } header: {
-                Text("Background template")
-            } footer: {
-                Text("Background fills the image; the QR uses about 72% of the square, centered, with see-through light modules so the template blends through. Choose a Foreground color that contrasts the art; use Q or H correction on busy backgrounds.")
+        case .sms:
+            VStack(spacing: 0) {
+                inputRow(label: "Phone",   binding: $sms.phone, placeholder: "+1 555 000 0000", keyboard: .phonePad)
+                Divider()
+                inputRow(label: "Message", binding: $sms.body,  placeholder: "Optional message")
             }
-
-            Section {
-                if let rendered {
-                    Image(uiImage: rendered)
-                        .interpolation(.none)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(maxHeight: 220)
-                        .padding(.vertical, 8)
-                } else {
-                    ContentUnavailableView("Preview", systemImage: "qrcode", description: Text("Enter content to generate a QR code."))
-                        .frame(height: 160)
-                }
-            }
-
-            Section {
-                Button("Regenerate preview") {
-                    regenerate()
-                }
-                .disabled(encodedPayload.isEmpty)
-
-                Button("Save to Library (app)") {
-                    saveToAppLibrary()
-                }
-                .disabled(rendered == nil)
-
-                Button("Save to Photos") {
-                    Task { await saveToPhotos() }
-                }
-                .disabled(rendered == nil)
-
-                Button("Share…") {
-                    showShare = true
-                }
-                .disabled(rendered == nil)
-            }
-        }
-        .navigationTitle("QR code")
-        .navigationBarTitleDisplayMode(.inline)
-        .onAppear { regenerate() }
-        .onChange(of: encodedPayload) { _, _ in regenerate() }
-        .onChange(of: style) { _, _ in regenerate() }
-        .onChange(of: logoImage) { _, _ in regenerate() }
-        .onChange(of: logoItem) { _, new in
-            Task {
-                if let new, let data = try? await new.loadTransferable(type: Data.self) {
-                    logoImage = UIImage(data: data)
-                } else {
-                    logoImage = nil
-                }
-            }
-        }
-        .sheet(isPresented: $showShare) {
-            if let rendered {
-                ActivityView(items: [rendered])
-            }
-        }
-        .alert("Could not save", isPresented: $showSaveError) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text(saveError ?? "")
-        }
-        .alert("Save limit reached", isPresented: $showLimitAlert) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text("Upgrade to save more items.")
+            .padding(.top, 4)
         }
     }
 
-    private func qrTemplateChip(item: QRBackgroundTemplateCatalog.Item) -> some View {
-        let selected = (style.backgroundTemplateId ?? "none").lowercased() == item.id.lowercased()
-        return Button {
-            style.backgroundTemplateId = item.id == "none" ? nil : item.id
-        } label: {
-            VStack(spacing: 6) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(Color(.secondarySystemFill))
-                        .frame(width: 76, height: 76)
-                    if item.id == "none" {
-                        Image(systemName: "rectangle.slash")
-                            .font(.title2)
-                            .foregroundStyle(.secondary)
-                    } else if let img = QRBackgroundTemplateCatalog.previewImage(id: item.id) {
-                        Image(uiImage: img)
-                            .resizable()
-                            .interpolation(.medium)
-                            .scaledToFill()
-                            .frame(width: 76, height: 76)
-                            .clipShape(RoundedRectangle(cornerRadius: 10))
+    private func inputRow(
+        label: String,
+        binding: Binding<String>,
+        placeholder: String,
+        secure: Bool = false,
+        keyboard: UIKeyboardType = .default
+    ) -> some View {
+        HStack(spacing: 12) {
+            Text(label)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .frame(width: 100, alignment: .leading)
+            if secure {
+                SecureField(placeholder, text: binding)
+                    .font(.body)
+            } else {
+                TextField(placeholder, text: binding)
+                    .font(.body)
+                    .keyboardType(keyboard)
+                    .autocorrectionDisabled()
+                    .textInputAutocapitalization(keyboard == .emailAddress ? .never : .sentences)
+            }
+        }
+        .padding(.vertical, 11)
+    }
+
+    // MARK: - Type picker grid
+
+    private var typeGrid: some View {
+        let pages: [[QRPayloadType]] = [QRPayloadType.gridPage1, QRPayloadType.gridPage2]
+
+        return TabView {
+            ForEach(pages.indices, id: \.self) { idx in
+                LazyVGrid(
+                    columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 4),
+                    spacing: 10
+                ) {
+                    ForEach(pages[idx]) { type in
+                        typeButton(type)
                     }
                 }
-                Text(item.title)
-                    .font(.caption2)
-                    .lineLimit(1)
-                    .foregroundStyle(.primary)
+                .padding(.horizontal, 16)
             }
-            .frame(width: 84)
+        }
+        .tabViewStyle(.page(indexDisplayMode: .always))
+        .frame(height: 190)
+    }
+
+    private func typeButton(_ type: QRPayloadType) -> some View {
+        Button { payloadType = type } label: {
+            VStack(spacing: 8) {
+                typeIconView(type)
+                    .frame(width: 56, height: 56)
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .stroke(payloadType == type ? Color(red: 0.18, green: 0.72, blue: 0.65) : Color.clear, lineWidth: 2.5)
+                    )
+                Text(type.title)
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
         }
         .buttonStyle(.plain)
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .strokeBorder(selected ? Color.accentColor : Color.clear, lineWidth: 2.5)
-        )
     }
 
-    private func bindingHex(_ keyPath: WritableKeyPath<QRStyleOptions, String>, default def: String) -> Binding<Color> {
-        Binding(
-            get: {
-                Color(uiColor: UIColor(hex: style[keyPath: keyPath]) ?? UIColor(hex: def) ?? .black)
-            },
-            set: { color in
-                var next = style
-                var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
-                UIColor(color).getRed(&r, green: &g, blue: &b, alpha: &a)
-                let ir = Int(round(r * 255)), ig = Int(round(g * 255)), ib = Int(round(b * 255))
-                next[keyPath: keyPath] = String(format: "#%02X%02X%02X", ir, ig, ib)
-                style = next
+    @ViewBuilder
+    private func typeIconView(_ type: QRPayloadType) -> some View {
+        ZStack {
+            Rectangle().fill(typeGradient(for: type))
+            Image(systemName: typeSFSymbol(for: type))
+                .font(.system(size: 22, weight: .medium))
+                .foregroundStyle(.white)
+        }
+    }
+
+    private func typeSFSymbol(for type: QRPayloadType) -> String {
+        switch type {
+        case .text:      "textformat.alt"
+        case .url:       "link"
+        case .instagram: "camera.fill"
+        case .contact:   "person.crop.rectangle.fill"
+        case .facebook:  "person.2.fill"
+        case .wifi:      "wifi"
+        case .whatsapp:  "bubble.left.fill"
+        case .youtube:   "play.rectangle.fill"
+        case .sms:       "message.fill"
+        }
+    }
+
+    private func typeGradient(for type: QRPayloadType) -> LinearGradient {
+        let colors: [Color] = {
+            switch type {
+            case .text:
+                return [Color(red: 0.18, green: 0.72, blue: 0.65), Color(red: 0.1, green: 0.55, blue: 0.52)]
+            case .url:
+                return [Color(red: 0.18, green: 0.72, blue: 0.65), Color(red: 0.1, green: 0.62, blue: 0.35)]
+            case .instagram:
+                return [Color(red: 0.85, green: 0.22, blue: 0.52), Color(red: 0.98, green: 0.55, blue: 0.15)]
+            case .contact:
+                return [Color(red: 0.18, green: 0.62, blue: 0.88), Color(red: 0.12, green: 0.45, blue: 0.75)]
+            case .facebook:
+                return [Color(red: 0.23, green: 0.38, blue: 0.68), Color(red: 0.18, green: 0.28, blue: 0.55)]
+            case .wifi:
+                return [Color(red: 0.18, green: 0.72, blue: 0.82), Color(red: 0.12, green: 0.52, blue: 0.68)]
+            case .whatsapp:
+                return [Color(red: 0.15, green: 0.72, blue: 0.35), Color(red: 0.08, green: 0.55, blue: 0.25)]
+            case .youtube:
+                return [Color(red: 0.95, green: 0.18, blue: 0.18), Color(red: 0.75, green: 0.1, blue: 0.1)]
+            case .sms:
+                return [Color(red: 0.45, green: 0.72, blue: 0.22), Color(red: 0.32, green: 0.55, blue: 0.12)]
             }
-        )
+        }()
+        return LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing)
     }
+}
 
-    private func regenerate() {
-        let msg = encodedPayload
-        guard !msg.isEmpty else {
-            rendered = nil
-            return
-        }
-        rendered = QRStyleRenderer.render(
-            message: msg,
-            options: style,
-            logo: logoImage,
-            outputPoints: 512,
-            showWatermark: features.watermarkEnabled
-        )
+#Preview {
+    NavigationStack {
+        QRCreateView()
     }
-
-    private func saveToAppLibrary() {
-        if let max = features.maxSavedItems {
-            let count = (try? modelContext.fetchCount(FetchDescriptor<SavedCode>())) ?? 0
-            if count >= max {
-                showLimitAlert = true
-                return
-            }
-        }
-        guard let img = rendered, let data = img.pngData() else { return }
-        let json = try? JSONEncoder().encode(style)
-        let title = payloadType.title + " · " + Date.now.formatted(date: .abbreviated, time: .shortened)
-        let item = SavedCode(
-            kind: .qr,
-            payload: encodedPayload,
-            title: title,
-            thumbnailData: data,
-            source: .created,
-            styleOptionsJSON: json
-        )
-        modelContext.insert(item)
-        try? modelContext.save()
-    }
-
-    private func saveToPhotos() async {
-        guard let img = rendered else { return }
-        do {
-            try await PhotoLibrarySaver.save(img)
-        } catch {
-            saveError = error.localizedDescription
-            showSaveError = true
-        }
-    }
+    .modelContainer(AppModelContainer.make(inMemory: true))
 }

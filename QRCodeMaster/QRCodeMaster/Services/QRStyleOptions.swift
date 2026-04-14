@@ -4,7 +4,6 @@
 //
 
 import CoreGraphics
-import SwiftUI
 import UIKit
 
 struct QRStyleOptions: Codable, Equatable, Sendable {
@@ -15,37 +14,115 @@ struct QRStyleOptions: Codable, Equatable, Sendable {
     var moduleShape: ModuleShape
     var eyeStyle: EyeStyle
     var frameId: String?
-    /// Built-in template id from `QRBackgroundTemplateCatalog`, or `nil` / `"none"` for a flat background.
+    /// Built-in template id from `QRBackgroundTemplateCatalog`, or `nil`/`"none"` for flat background.
     var backgroundTemplateId: String?
-    /// Max fraction of QR width for logo (0...0.35)
+    /// Max fraction of QR width for logo (0…0.35)
     var logoMaxRelativeSize: Double
+    /// Optional text label drawn below the QR in the exported image.
+    var captionText: String
+    var captionColorHex: String
 
     enum ModuleShape: String, Codable, CaseIterable, Sendable {
         case square
         case rounded
         case dot
+        case diamond    // rotated square
+
+        var displayName: String {
+            switch self {
+            case .square:  "Square"
+            case .rounded: "Rounded"
+            case .dot:     "Dot"
+            case .diamond: "Diamond"
+            }
+        }
     }
 
     enum EyeStyle: String, Codable, CaseIterable, Sendable {
         case square
         case roundedLeaf
         case circle
+        case squareCircle   // square outer ring, circle inner fill
+
+        var displayName: String {
+            switch self {
+            case .square:      "Square"
+            case .roundedLeaf: "Rounded"
+            case .circle:      "Circle"
+            case .squareCircle: "Classic"
+            }
+        }
     }
 
-    static let `default` = QRStyleOptions(
-        foregroundHex: "#000000",
-        backgroundHex: "#FFFFFF",
-        errorCorrection: "M",
-        moduleShape: .square,
-        eyeStyle: .square,
-        frameId: nil,
-        backgroundTemplateId: nil,
-        logoMaxRelativeSize: 0.22
-    )
+    // MARK: - Memberwise init (keeps default values)
+
+    init(
+        foregroundHex: String = "#000000",
+        backgroundHex: String = "#FFFFFF",
+        errorCorrection: String = "M",
+        moduleShape: ModuleShape = .square,
+        eyeStyle: EyeStyle = .square,
+        frameId: String? = nil,
+        backgroundTemplateId: String? = nil,
+        logoMaxRelativeSize: Double = 0.22,
+        captionText: String = "",
+        captionColorHex: String = "#000000"
+    ) {
+        self.foregroundHex = foregroundHex
+        self.backgroundHex = backgroundHex
+        self.errorCorrection = errorCorrection
+        self.moduleShape = moduleShape
+        self.eyeStyle = eyeStyle
+        self.frameId = frameId
+        self.backgroundTemplateId = backgroundTemplateId
+        self.logoMaxRelativeSize = logoMaxRelativeSize
+        self.captionText = captionText
+        self.captionColorHex = captionColorHex
+    }
+
+    static let `default` = QRStyleOptions()
 
     func foregroundUIColor() -> UIColor { UIColor(hex: foregroundHex) ?? .black }
     func backgroundUIColor() -> UIColor { UIColor(hex: backgroundHex) ?? .white }
+
+    // MARK: - Codable (manual, backward-compat: unknown/missing keys fall back to defaults)
+
+    private enum CodingKeys: String, CodingKey {
+        case foregroundHex, backgroundHex, errorCorrection, moduleShape, eyeStyle
+        case frameId, backgroundTemplateId, logoMaxRelativeSize
+        case captionText, captionColorHex
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        foregroundHex       = (try? c.decode(String.self,      forKey: .foregroundHex))       ?? "#000000"
+        backgroundHex       = (try? c.decode(String.self,      forKey: .backgroundHex))       ?? "#FFFFFF"
+        errorCorrection     = (try? c.decode(String.self,      forKey: .errorCorrection))     ?? "M"
+        moduleShape         = (try? c.decode(ModuleShape.self, forKey: .moduleShape))         ?? .square
+        eyeStyle            = (try? c.decode(EyeStyle.self,    forKey: .eyeStyle))            ?? .square
+        frameId             = try? c.decode(String.self,       forKey: .frameId)
+        backgroundTemplateId = try? c.decode(String.self,      forKey: .backgroundTemplateId)
+        logoMaxRelativeSize = (try? c.decode(Double.self,      forKey: .logoMaxRelativeSize)) ?? 0.22
+        captionText         = (try? c.decode(String.self,      forKey: .captionText))         ?? ""
+        captionColorHex     = (try? c.decode(String.self,      forKey: .captionColorHex))     ?? "#000000"
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(foregroundHex,       forKey: .foregroundHex)
+        try c.encode(backgroundHex,       forKey: .backgroundHex)
+        try c.encode(errorCorrection,     forKey: .errorCorrection)
+        try c.encode(moduleShape,         forKey: .moduleShape)
+        try c.encode(eyeStyle,            forKey: .eyeStyle)
+        try c.encodeIfPresent(frameId,             forKey: .frameId)
+        try c.encodeIfPresent(backgroundTemplateId, forKey: .backgroundTemplateId)
+        try c.encode(logoMaxRelativeSize, forKey: .logoMaxRelativeSize)
+        try c.encode(captionText,         forKey: .captionText)
+        try c.encode(captionColorHex,     forKey: .captionColorHex)
+    }
 }
+
+// MARK: - UIColor hex helper
 
 extension UIColor {
     convenience init?(hex: String) {
@@ -59,12 +136,12 @@ extension UIColor {
             a = CGFloat((value & 0xFF00_0000) >> 24) / 255
             r = CGFloat((value & 0x00FF_0000) >> 16) / 255
             g = CGFloat((value & 0x0000_FF00) >> 8) / 255
-            b = CGFloat(value & 0x0000_00FF) / 255
+            b = CGFloat( value & 0x0000_00FF) / 255
         } else {
             a = 1
             r = CGFloat((value & 0xFF00_00) >> 16) / 255
             g = CGFloat((value & 0x00FF_00) >> 8) / 255
-            b = CGFloat(value & 0x0000_FF) / 255
+            b = CGFloat( value & 0x0000_FF) / 255
         }
         self.init(red: r, green: g, blue: b, alpha: a)
     }

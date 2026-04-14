@@ -90,9 +90,11 @@ enum QRStyleRenderer {
             ctx.fill(bounds)
         }
 
-        // ── Step 2: Brand gradient — inner QR card area only ─────────────────────
-        // Painted directly with CGContext so the clip to qrRect is guaranteed.
-        // Modules are drawn on top of this in the user's chosen foreground colour.
+        // ── Step 2: Brand icon — inner QR card area only ─────────────────────────
+        // Renders exactly what is shown in the Color panel cell:
+        //   • gradient fills the card background
+        //   • brand logo mark drawn centred at ~25 % opacity so it shows through the QR gaps
+        // Modules are painted on top of this in the user's chosen foreground colour.
         if hasBrand,
            let brand = QRBackgroundTemplateCatalog.brandItems.first(where: { $0.id == brandId }),
            let c1 = UIColor(hex: brand.startHex),
@@ -104,15 +106,34 @@ enum QRStyleRenderer {
                locations: [0.0, 1.0]
            ) {
             ctx.saveGState()
+            // Clip everything in this step to the rounded card rect
             let cardClip = UIBezierPath(roundedRect: qrRect, cornerRadius: qrRect.width * 0.05)
             ctx.addPath(cardClip.cgPath)
             ctx.clip()
+
+            // 1 — gradient background
             ctx.drawLinearGradient(
                 gradient,
                 start: qrRect.origin,
                 end: CGPoint(x: qrRect.maxX, y: qrRect.maxY),
                 options: [.drawsBeforeStartLocation, .drawsAfterEndLocation]
             )
+
+            // 2 — brand logo mark centred in the card at ~22 % opacity
+            //     Uses the same SF Symbol the Color-panel cell shows.
+            let iconPt  = qrRect.width * 0.55          // point size for the symbol
+            let symConf = UIImage.SymbolConfiguration(pointSize: iconPt, weight: .bold)
+            if let sym = UIImage(systemName: brand.sfSymbol, withConfiguration: symConf)?
+                .withTintColor(.white, renderingMode: .alwaysOriginal) {
+                // Scale to fill ~55 % of the card
+                let iw = qrRect.width  * 0.55
+                let ih = qrRect.height * 0.55
+                let ir = CGRect(x: qrRect.midX - iw / 2,
+                                y: qrRect.midY - ih / 2,
+                                width: iw, height: ih)
+                sym.draw(in: ir, blendMode: .normal, alpha: 0.22)
+            }
+
             ctx.restoreGState()
         }
 

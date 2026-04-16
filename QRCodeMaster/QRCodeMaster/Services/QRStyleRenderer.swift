@@ -242,8 +242,9 @@ enum QRStyleRenderer {
         let inner  = CGRect(x: origin.x + inset2, y: origin.y + inset2, width: size3, height: size3)
 
         switch eye {
+
+        // ── Original 4 ────────────────────────────────────────────────────────
         case .square:
-            // Ring = outer rect with rectangular hole punched through (even-odd fill)
             fillRing(ctx, outer: outer, void: middle, outerRadius: 0, voidRadius: 0, color: fg)
             fill(ctx, rect: inner, color: fg, radius: 0)
 
@@ -255,13 +256,59 @@ enum QRStyleRenderer {
             fill(ctx, rect: inner, color: fg, radius: innerR)
 
         case .circle:
-            // Elliptical ring
             fillEllipseRing(ctx, outer: outer, void: middle, color: fg)
             fillEllipse(ctx, rect: inner, color: fg)
 
         case .squareCircle:
             fillRing(ctx, outer: outer, void: middle, outerRadius: 0, voidRadius: 0, color: fg)
             fillEllipse(ctx, rect: inner, color: fg)
+
+        // ── 8 New styles ──────────────────────────────────────────────────────
+        case .circleSquare:
+            // Circle outer ring + square inner fill
+            fillEllipseRing(ctx, outer: outer, void: middle, color: fg)
+            fill(ctx, rect: inner, color: fg, radius: 0)
+
+        case .squareDiamond:
+            // Square outer ring + diamond (45° rotated square) inner fill
+            fillRing(ctx, outer: outer, void: middle, outerRadius: 0, voidRadius: 0, color: fg)
+            fillDiamond(ctx, rect: inner, color: fg)
+
+        case .diamond:
+            // Diamond outer ring + diamond inner fill
+            fillDiamondRing(ctx, outer: outer, void: middle, color: fg)
+            fillDiamond(ctx, rect: inner, color: fg)
+
+        case .roundedCircle:
+            // Rounded outer ring + circle inner fill
+            let outerR = size7 * 0.28
+            let midR   = max(0, outerR - moduleScale)
+            fillRing(ctx, outer: outer, void: middle, outerRadius: outerR, voidRadius: midR, color: fg)
+            fillEllipse(ctx, rect: inner, color: fg)
+
+        case .squareRounded:
+            // Square outer ring + heavily rounded inner (pill-like)
+            fillRing(ctx, outer: outer, void: middle, outerRadius: 0, voidRadius: 0, color: fg)
+            fill(ctx, rect: inner, color: fg, radius: size3 * 0.45)
+
+        case .circleRound:
+            // Circle outer ring + rounded-square inner
+            fillEllipseRing(ctx, outer: outer, void: middle, color: fg)
+            fill(ctx, rect: inner, color: fg, radius: size3 * 0.28)
+
+        case .concentric:
+            // Two concentric circle rings — no filled centre
+            fillEllipseRing(ctx, outer: outer, void: middle, color: fg)
+            // Inner ring: draw the 3×3 inner rect as a ring with a small void
+            let innerVoid = inner.insetBy(dx: moduleScale * 0.5, dy: moduleScale * 0.5)
+            fillEllipseRing(ctx, outer: inner, void: innerVoid, color: fg)
+
+        case .roundedDiamond:
+            // Rounded outer ring + diamond inner fill
+            let outerR2 = size7 * 0.28
+            let midR2   = max(0, outerR2 - moduleScale)
+            fillRing(ctx, outer: outer, void: middle, outerRadius: outerR2, voidRadius: midR2, color: fg)
+            fillDiamond(ctx, rect: inner, color: fg)
         }
     }
 
@@ -301,6 +348,41 @@ enum QRStyleRenderer {
         outerPath.append(voidPath)
         outerPath.usesEvenOddFillRule = true
 
+        ctx.saveGState()
+        ctx.setFillColor(color.cgColor)
+        ctx.addPath(outerPath.cgPath)
+        ctx.fillPath(using: .evenOdd)
+        ctx.restoreGState()
+    }
+
+    // MARK: - Diamond helpers
+
+    /// Returns a UIBezierPath diamond (axis-aligned rhombus) that fits inside `rect`.
+    private static func diamondBezierPath(rect: CGRect) -> UIBezierPath {
+        let path = UIBezierPath()
+        path.move(to:    CGPoint(x: rect.midX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.midY))
+        path.addLine(to: CGPoint(x: rect.midX, y: rect.maxY))
+        path.addLine(to: CGPoint(x: rect.minX, y: rect.midY))
+        path.close()
+        return path
+    }
+
+    /// Fills a solid diamond shape.
+    private static func fillDiamond(_ ctx: CGContext, rect: CGRect, color: UIColor) {
+        ctx.saveGState()
+        ctx.setFillColor(color.cgColor)
+        ctx.addPath(diamondBezierPath(rect: rect).cgPath)
+        ctx.fillPath()
+        ctx.restoreGState()
+    }
+
+    /// Fills a diamond ring (outer diamond minus inner diamond void, even-odd).
+    private static func fillDiamondRing(_ ctx: CGContext, outer: CGRect, void voidRect: CGRect, color: UIColor) {
+        let outerPath = diamondBezierPath(rect: outer)
+        let voidPath  = diamondBezierPath(rect: voidRect)
+        outerPath.append(voidPath)
+        outerPath.usesEvenOddFillRule = true
         ctx.saveGState()
         ctx.setFillColor(color.cgColor)
         ctx.addPath(outerPath.cgPath)

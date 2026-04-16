@@ -42,17 +42,35 @@ struct QRStyleOptions: Codable, Equatable, Sendable {
     }
 
     enum EyeStyle: String, Codable, CaseIterable, Sendable {
-        case square
-        case roundedLeaf
-        case circle
-        case squareCircle   // square outer ring, circle inner fill
+        // ── Original 4 ────────────────────────────────────────────────────────
+        case square             // square outer  + square inner
+        case roundedLeaf        // rounded outer + rounded inner
+        case circle             // circle outer  + circle inner
+        case squareCircle       // square outer  + circle inner
+        // ── 8 New styles ──────────────────────────────────────────────────────
+        case circleSquare       // circle outer  + square inner
+        case squareDiamond      // square outer  + diamond inner
+        case diamond            // diamond outer + diamond inner
+        case roundedCircle      // rounded outer + circle inner
+        case squareRounded      // square outer  + heavily-rounded rect inner
+        case circleRound        // circle outer  + rounded-square inner
+        case concentric         // double circle rings, no filled centre
+        case roundedDiamond     // rounded outer + diamond inner
 
         var displayName: String {
             switch self {
-            case .square:      "Square"
-            case .roundedLeaf: "Rounded"
-            case .circle:      "Circle"
-            case .squareCircle: "Classic"
+            case .square:         "Square"
+            case .roundedLeaf:    "Rounded"
+            case .circle:         "Circle"
+            case .squareCircle:   "Sq+Circle"
+            case .circleSquare:   "Circ+Sq"
+            case .squareDiamond:  "Sq+Diamond"
+            case .diamond:        "Diamond"
+            case .roundedCircle:  "Rnd+Circle"
+            case .squareRounded:  "Sq+Round"
+            case .circleRound:    "Circ+Round"
+            case .concentric:     "Concentric"
+            case .roundedDiamond: "Rnd+Diamond"
             }
         }
     }

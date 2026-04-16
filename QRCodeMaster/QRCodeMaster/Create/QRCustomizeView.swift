@@ -773,31 +773,80 @@ private struct EyeStylePreview: View {
 
     var body: some View {
         Canvas { ctx, size in
-            let stroke = GraphicsContext.Shading.color(.black)
-            let fill   = GraphicsContext.Shading.color(.black)
+            let ink = GraphicsContext.Shading.color(.primary)
+            let lw: CGFloat = 3
             let pad: CGFloat = 6
-            let outer = CGRect(x: pad, y: pad, width: size.width - pad * 2, height: size.height - pad * 2)
-            let innerPad = outer.width * 0.28
-            let inner = outer.insetBy(dx: innerPad, dy: innerPad)
+            let outer  = CGRect(x: pad, y: pad, width: size.width - pad * 2, height: size.height - pad * 2)
+            let iPad   = outer.width * 0.28
+            let inner  = outer.insetBy(dx: iPad, dy: iPad)
+            let outerR = outer.width * 0.25
+            let innerR = inner.width * 0.25
 
             switch style {
+
+            // ── Original 4 ────────────────────────────────────────────────
             case .square:
-                ctx.stroke(Path(outer), with: stroke, lineWidth: 3)
-                ctx.fill(Path(inner), with: fill)
+                ctx.stroke(Path(outer), with: ink, lineWidth: lw)
+                ctx.fill(Path(inner), with: ink)
+
             case .roundedLeaf:
-                let outerR: CGFloat = outer.width * 0.25
-                let innerR: CGFloat = inner.width * 0.25
-                ctx.stroke(Path(roundedRect: outer, cornerRadius: outerR), with: stroke, lineWidth: 3)
-                ctx.fill(Path(roundedRect: inner, cornerRadius: innerR), with: fill)
+                ctx.stroke(Path(roundedRect: outer, cornerRadius: outerR), with: ink, lineWidth: lw)
+                ctx.fill(Path(roundedRect: inner, cornerRadius: innerR), with: ink)
+
             case .circle:
-                ctx.stroke(Path(ellipseIn: outer), with: stroke, lineWidth: 3)
-                ctx.fill(Path(ellipseIn: inner), with: fill)
+                ctx.stroke(Path(ellipseIn: outer), with: ink, lineWidth: lw)
+                ctx.fill(Path(ellipseIn: inner), with: ink)
+
             case .squareCircle:
-                ctx.stroke(Path(outer), with: stroke, lineWidth: 3)
-                ctx.fill(Path(ellipseIn: inner), with: fill)
+                ctx.stroke(Path(outer), with: ink, lineWidth: lw)
+                ctx.fill(Path(ellipseIn: inner), with: ink)
+
+            // ── 8 New styles ───────────────────────────────────────────────
+            case .circleSquare:
+                ctx.stroke(Path(ellipseIn: outer), with: ink, lineWidth: lw)
+                ctx.fill(Path(inner), with: ink)
+
+            case .squareDiamond:
+                ctx.stroke(Path(outer), with: ink, lineWidth: lw)
+                ctx.fill(diamondPath(inner), with: ink)
+
+            case .diamond:
+                ctx.stroke(diamondPath(outer), with: ink, lineWidth: lw)
+                ctx.fill(diamondPath(inner), with: ink)
+
+            case .roundedCircle:
+                ctx.stroke(Path(roundedRect: outer, cornerRadius: outerR), with: ink, lineWidth: lw)
+                ctx.fill(Path(ellipseIn: inner), with: ink)
+
+            case .squareRounded:
+                ctx.stroke(Path(outer), with: ink, lineWidth: lw)
+                ctx.fill(Path(roundedRect: inner, cornerRadius: inner.width * 0.45), with: ink)
+
+            case .circleRound:
+                ctx.stroke(Path(ellipseIn: outer), with: ink, lineWidth: lw)
+                ctx.fill(Path(roundedRect: inner, cornerRadius: inner.width * 0.28), with: ink)
+
+            case .concentric:
+                ctx.stroke(Path(ellipseIn: outer), with: ink, lineWidth: lw)
+                ctx.stroke(Path(ellipseIn: inner), with: ink, lineWidth: lw * 0.8)
+
+            case .roundedDiamond:
+                ctx.stroke(Path(roundedRect: outer, cornerRadius: outerR), with: ink, lineWidth: lw)
+                ctx.fill(diamondPath(inner), with: ink)
             }
         }
         .padding(8)
+    }
+
+    // Diamond (axis-aligned rhombus) path helper
+    private func diamondPath(_ rect: CGRect) -> Path {
+        var p = Path()
+        p.move(to:    CGPoint(x: rect.midX, y: rect.minY))
+        p.addLine(to: CGPoint(x: rect.maxX, y: rect.midY))
+        p.addLine(to: CGPoint(x: rect.midX, y: rect.maxY))
+        p.addLine(to: CGPoint(x: rect.minX, y: rect.midY))
+        p.closeSubpath()
+        return p
     }
 }
 

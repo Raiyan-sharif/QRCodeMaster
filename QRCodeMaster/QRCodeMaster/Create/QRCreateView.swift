@@ -100,6 +100,13 @@ struct QRCreateView: View {
                 inputFields
                     .padding(.horizontal, 16)
                     .padding(.bottom, 14)
+                    // Slide-fade in whenever the payload type changes
+                    .id(payloadType)
+                    .transition(.asymmetric(
+                        insertion: .move(edge: .trailing).combined(with: .opacity),
+                        removal:   .move(edge: .leading).combined(with: .opacity)
+                    ))
+                    .animation(.spring(response: 0.32, dampingFraction: 0.78), value: payloadType)
             }
             .frame(maxWidth: .infinity)
         }
@@ -390,8 +397,13 @@ struct QRCreateView: View {
     }
 
     private func typeButton(_ type: QRPayloadType) -> some View {
-        Button {
-            payloadType = type
+        let isSelected = payloadType == type
+        let teal = Color(red: 0.18, green: 0.72, blue: 0.65)
+
+        return Button {
+            withAnimation(.spring(response: 0.28, dampingFraction: 0.55)) {
+                payloadType = type
+            }
             textPayload = ""
             selectedCountry = .deviceDefault
         } label: {
@@ -401,16 +413,20 @@ struct QRCreateView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                     .overlay(
                         RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .stroke(payloadType == type ? Color(red: 0.18, green: 0.72, blue: 0.65) : Color.clear, lineWidth: 2.5)
+                            .stroke(isSelected ? teal : Color.clear, lineWidth: 2.5)
+                            .animation(.easeInOut(duration: 0.18), value: isSelected)
                     )
+                    .scaleEffect(isSelected ? 1.08 : 1.0)
+                    .animation(.spring(response: 0.28, dampingFraction: 0.52), value: isSelected)
                 Text(type.title)
                     .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(payloadType == type ? Color(red: 0.18, green: 0.72, blue: 0.65) : .primary)
+                    .foregroundStyle(isSelected ? teal : .primary)
+                    .animation(.easeInOut(duration: 0.15), value: isSelected)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
             }
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressScaleButtonStyle(scale: 0.93))
     }
 
     @ViewBuilder

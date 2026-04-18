@@ -25,6 +25,10 @@ struct QRCustomizeView: View {
     @State private var navigateToSaved = false
     @State private var savedImage: UIImage?
 
+    // Animation state
+    @State private var renderVersion: Int = 0    // incremented each render → drives cross-fade
+    @State private var prevPanel: Panel? = nil   // used to determine slide direction
+
     // Color panel state
     @State private var colorTab: ColorTab = .foreground
 
@@ -105,7 +109,13 @@ struct QRCustomizeView: View {
             if let panel = activePanel {
                 Divider()
                 panelContent(panel)
-                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+                    // Slide from the direction of the newly selected panel
+                    .id(panel)
+                    .transition(.asymmetric(
+                        insertion: .move(edge: panelEdge(for: panel)).combined(with: .opacity),
+                        removal:   .move(edge: panelEdge(for: panel) == .trailing ? .leading : .trailing).combined(with: .opacity)
+                    ))
+                    .animation(.spring(response: 0.32, dampingFraction: 0.80), value: panel)
             }
 
             Spacer(minLength: 0)
@@ -144,6 +154,9 @@ struct QRCustomizeView: View {
                     .scaledToFit()
                     .padding(24)
                     .shadow(color: .black.opacity(0.08), radius: 10, x: 0, y: 4)
+                    // Each new render gets a new ID → SwiftUI replaces with cross-fade
+                    .id(renderVersion)
+                    .transition(.opacity.animation(.easeInOut(duration: 0.25)))
                     // Dim + spinner overlay while a new render is in flight.
                     .overlay {
                         if isRendering {
@@ -163,11 +176,12 @@ struct QRCustomizeView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
+                .transition(.opacity)
             }
         }
         .frame(maxWidth: .infinity)
         .frame(height: 260)
-        .animation(.easeInOut(duration: 0.15), value: isRendering)
+        .animation(.easeInOut(duration: 0.2), value: isRendering)
     }
 
     // MARK: - Tool button row
@@ -176,7 +190,8 @@ struct QRCustomizeView: View {
         HStack(spacing: 0) {
             ForEach(Panel.allCases, id: \.title) { panel in
                 Button {
-                    withAnimation(.spring(response: 0.3)) {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.72)) {
+                        prevPanel  = activePanel
                         activePanel = (activePanel == panel) ? nil : panel
                     }
                 } label: {
@@ -188,7 +203,10 @@ struct QRCustomizeView: View {
                             .background(
                                 RoundedRectangle(cornerRadius: 12)
                                     .fill(activePanel == panel ? panel.iconColor.opacity(0.15) : Color.clear)
+                                    .animation(.spring(response: 0.28), value: activePanel)
                             )
+                            .scaleEffect(activePanel == panel ? 1.08 : 1.0)
+                            .animation(.spring(response: 0.28, dampingFraction: 0.55), value: activePanel)
                         Text(panel.title)
                             .font(.system(size: 10, weight: .medium))
                             .foregroundStyle(activePanel == panel ? panel.iconColor : Color(.secondaryLabel))
@@ -667,9 +685,22 @@ struct QRCustomizeView: View {
             }.value
 
             guard !Task.isCancelled else { return }
-            rendered    = image
+            withAnimation(.easeInOut(duration: 0.25)) {
+                rendered = image
+            }
+            renderVersion += 1
             isRendering = false
         }
+    }
+
+    // Returns the edge a panel slides in from based on its position
+    // relative to the previously active panel.
+    private func panelEdge(for panel: Panel) -> Edge {
+        guard let prev = prevPanel else { return .bottom }
+        let allCases = Panel.allCases
+        let newIndex  = allCases.firstIndex(of: panel) ?? 0
+        let prevIndex = allCases.firstIndex(of: prev)  ?? 0
+        return newIndex > prevIndex ? .trailing : .leading
     }
 
     private func loadLogo(_ item: PhotosPickerItem?) {

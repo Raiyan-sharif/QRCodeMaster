@@ -11,6 +11,12 @@ struct HomeView: View {
     @State private var showComingSoon: String?
     @State private var showMoreActions = false
 
+    // Appear animation state
+    @State private var headerAppeared  = false
+    @State private var cardsAppeared   = false
+    @State private var featureAppeared = false
+    @State private var trendAppeared   = false
+
     private let cardCorner: CGFloat = 20
     private let gridSpacing: CGFloat = 12
 
@@ -20,22 +26,40 @@ struct HomeView: View {
                 header
                     .padding(.horizontal, 20)
                     .padding(.top, 8)
+                    .opacity(headerAppeared ? 1 : 0)
+                    .offset(y: headerAppeared ? 0 : -12)
+                    .animation(.spring(response: 0.45, dampingFraction: 0.78).delay(0.05), value: headerAppeared)
 
                 primaryCards
                     .padding(.horizontal, 20)
                     .padding(.top, 20)
+                    .opacity(cardsAppeared ? 1 : 0)
+                    .offset(y: cardsAppeared ? 0 : 24)
+                    .animation(.spring(response: 0.5, dampingFraction: 0.75).delay(0.12), value: cardsAppeared)
 
                 featureSection
                     .padding(.horizontal, 20)
                     .padding(.top, 28)
+                    .opacity(featureAppeared ? 1 : 0)
+                    .offset(y: featureAppeared ? 0 : 24)
+                    .animation(.spring(response: 0.5, dampingFraction: 0.75).delay(0.22), value: featureAppeared)
 
                 trendingSection
                     .padding(.top, 28)
                     .padding(.bottom, 32)
+                    .opacity(trendAppeared ? 1 : 0)
+                    .offset(y: trendAppeared ? 0 : 24)
+                    .animation(.spring(response: 0.5, dampingFraction: 0.75).delay(0.32), value: trendAppeared)
             }
         }
         .background(Color(.systemGroupedBackground))
         .navigationBarHidden(true)
+        .onAppear {
+            headerAppeared  = true
+            cardsAppeared   = true
+            featureAppeared = true
+            trendAppeared   = true
+        }
         .sheet(isPresented: $showSettings) {
             NavigationStack {
                 MineView()
@@ -108,7 +132,7 @@ struct HomeView: View {
                     ]
                 )
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PressScaleButtonStyle())
 
             NavigationLink {
                 BarcodeCreateView()
@@ -122,7 +146,7 @@ struct HomeView: View {
                     ]
                 )
             }
-            .buttonStyle(.plain)
+            .buttonStyle(PressScaleButtonStyle())
         }
     }
 
@@ -207,7 +231,7 @@ struct HomeView: View {
         Button(action: action) {
             gridCell(title: title, systemImage: systemImage)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressScaleButtonStyle(scale: 0.94))
     }
 
     private func gridCell(title: String, systemImage: String) -> some View {

@@ -1,6 +1,6 @@
 # QRCodeMaster
 
-An iOS app for **creating**, **customising**, and **scanning** QR codes and barcodes — with 31 payload types, rich style controls, brand-themed backgrounds, 12 finder-eye shapes, decorative templates, and a full saved-code library.
+An iOS app for **creating**, **customising**, and **scanning** QR codes and barcodes — with 31 payload types, rich style controls, brand-themed backgrounds, 12 finder-eye shapes, decorative templates, fluid screen-transition animations, and a full saved-code library.
 
 ## Requirements
 
@@ -16,10 +16,12 @@ An iOS app for **creating**, **customising**, and **scanning** QR codes and barc
 
 | Tab | Description |
 |-----|-------------|
-| **Home** | Quick-create shortcuts (QR / Barcode), template gallery preview, trending-style cards, gear icon opens **Mine**. |
+| **Home** | Quick-create shortcuts (QR / Barcode), template gallery preview, trending-style cards, gear icon opens **Mine**. Cards animate in with a staggered entrance and compress on tap. |
 | **Template** | Browse procedural background templates (Sunset, Ocean, Forest, Paper, Grid, …) organized by category. Tapping opens the full Create → Customize flow with the template pre-loaded. |
 | **Scan** | Camera scanner for QR codes and all major barcode formats. Safe URL opening for `http`/`https`; all other payloads can be copied. |
 | **Drafts** | SwiftData-backed library with folders, favorites, full-text search, detail view, share, and save-to-photos. |
+
+Tab switching uses a custom animated tab bar: each tab slides + fades + scales in/out; the selected icon bounces with an underdamped spring. All four NavigationStacks stay alive in memory so navigation state, camera sessions, and scroll positions are preserved across tab switches.
 
 ### QR Creation — 31 payload types across 4 pages
 
@@ -33,6 +35,8 @@ An iOS app for **creating**, **customising**, and **scanning** QR codes and barc
 Structured input forms (multi-field) for: **WiFi**, **Contact** (name, phone, fax, email, company, job title, address, website, memo), **SMS**, **Email**, **Spotify**, **Calendar**.  
 Phone-based types include an **interactive country-code picker** with flag emoji, localized name, and dial code — defaults to the device locale.
 
+Selecting a type **bounces** the icon to 108% with an underdamped spring. Switching between types slides the input form in from the correct direction (left or right) with a spring transition.
+
 ### Customize panel (6 tabs)
 
 | Panel | Options |
@@ -43,6 +47,8 @@ Phone-based types include an **interactive country-code picker** with flag emoji
 | **Text** | Caption label drawn below the exported image. |
 | **Dots** | 4 module shapes: Square, Rounded, Dot, Diamond. |
 | **Eyes** | 12 finder-eye styles (see table below). |
+
+The panel toolbar uses **direction-aware slide transitions**: switching from Template → Color slides the new panel in from the right; switching back slides it in from the left. The selected tool icon bounces with an underdamped spring. The QR preview **cross-fades** on each new render instead of swapping instantly.
 
 #### 12 finder-eye styles
 
@@ -104,7 +110,8 @@ QRCodeMaster/QRCodeMaster/
 │   └── EAN13Encoder.swift
 ├── Shared/
 │   ├── BrandIconView.swift        # AsyncImage Clearbit + offline fallback
-│   └── CountryPickerSheet.swift   # Searchable country / dial-code picker
+│   ├── CountryPickerSheet.swift   # Searchable country / dial-code picker
+│   └── PressScaleButtonStyle.swift # Reusable press-scale button feedback
 ├── Settings/
 │   └── MineView.swift
 ├── Models/
@@ -132,6 +139,10 @@ QRCodeMaster/QRCodeMaster/
 | Direct `CGContext.drawLinearGradient` for brand step | Avoids nested `UIGraphicsBeginImageContextWithOptions` context issues that broke clipping when using intermediate `UIImage.draw`. |
 | `Task.detached` for rendering | Keeps the main actor / SwiftUI free during the ~50 ms CoreGraphics render. |
 | Manual `Codable` on `QRStyleOptions` | Backward-compatible decoding: unknown keys fall back to defaults rather than throwing. |
+| Opacity-hidden tabs instead of lazy `if selectedTab == X` | All four NavigationStacks remain in the view hierarchy at all times; camera sessions, navigation stacks, and scroll positions survive tab switches. |
+| `renderVersion` Int bumped per render | Gives each QR image a unique `.id()` so SwiftUI replaces it with a cross-fade transition rather than an in-place swap. |
+| `PressScaleButtonStyle` with configurable `scale` | Centralises press-feedback so every tappable surface (primary cards, grid buttons, type icons) shares one consistent spring curve. |
+| Direction-aware panel slide in `QRCustomizeView` | `prevPanel` index comparison determines `.leading` vs `.trailing` edge so the panel always slides in the intuitive direction. |
 
 ---
 

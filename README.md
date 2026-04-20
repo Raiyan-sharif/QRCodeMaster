@@ -2,6 +2,17 @@
 
 An iOS app for **creating**, **customising**, and **scanning** QR codes and barcodes — with 31 payload types, rich style controls, brand-themed backgrounds, 12 finder-eye shapes, decorative templates, fluid screen-transition animations, and a full saved-code library.
 
+## Contents
+
+- [Requirements](#requirements)
+- [Features](#features)
+  - [Motion & transitions](#motion--transitions)
+- [Architecture](#architecture)
+- [Building](#building)
+- [Privacy entitlements](#privacy-entitlements)
+- [Roadmap](#roadmap)
+- [License](#license)
+
 ## Requirements
 
 | | |
@@ -16,12 +27,12 @@ An iOS app for **creating**, **customising**, and **scanning** QR codes and barc
 
 | Tab | Description |
 |-----|-------------|
-| **Home** | Quick-create shortcuts (QR / Barcode), template gallery preview, trending-style cards, gear icon opens **Mine**. Cards animate in with a staggered entrance and compress on tap. |
+| **Home** | Quick-create shortcuts (QR / Barcode), template gallery preview, trending-style cards, gear icon opens **Mine**. Staggered entrance on appear; primary cards and quick actions use press-scale feedback. |
 | **Template** | Browse procedural background templates (Sunset, Ocean, Forest, Paper, Grid, …) organized by category. Tapping opens the full Create → Customize flow with the template pre-loaded. |
 | **Scan** | Camera scanner for QR codes and all major barcode formats. Safe URL opening for `http`/`https`; all other payloads can be copied. |
 | **Drafts** | SwiftData-backed library with folders, favorites, full-text search, detail view, share, and save-to-photos. |
 
-Tab switching uses a custom animated tab bar: each tab slides + fades + scales in/out; the selected icon bounces with an underdamped spring. All four NavigationStacks stay alive in memory so navigation state, camera sessions, and scroll positions are preserved across tab switches.
+Tab switching is implemented in `MainTabView` with a **custom tab bar** (not `TabView`): see [Motion & transitions](#motion--transitions).
 
 ### QR Creation — 31 payload types across 4 pages
 
@@ -35,20 +46,20 @@ Tab switching uses a custom animated tab bar: each tab slides + fades + scales i
 Structured input forms (multi-field) for: **WiFi**, **Contact** (name, phone, fax, email, company, job title, address, website, memo), **SMS**, **Email**, **Spotify**, **Calendar**.  
 Phone-based types include an **interactive country-code picker** with flag emoji, localized name, and dial code — defaults to the device locale.
 
-Selecting a type **bounces** the icon to 108% with an underdamped spring. Switching between types slides the input form in from the correct direction (left or right) with a spring transition.
+Type selection and input-area transitions are described under [Motion & transitions](#motion--transitions).
 
 ### Customize panel (6 tabs)
 
 | Panel | Options |
 |-------|---------|
-| **Template** | 8 full-canvas decorative backgrounds (gradient + pattern art). |
-| **Color** | Foreground hex, background solid swatches. **Background → Image**: 22 brand icon cells (Instagram, WhatsApp, Facebook, YouTube, TikTok, Snapchat, Spotify, Telegram, Discord, Reddit, X, Line, LinkedIn, Pinterest, Viber, WeChat, PayPal, Skype, Messenger, Truth Social, BNB, Ethereum). Brand selection paints the brand gradient + centered logo mark into the inner QR card area; outer canvas stays white (or the decorative template). |
+| **Template** | **None** plus 8 full-canvas procedural backgrounds (Sunset, Ocean, Forest, Paper, Soft grid, Dots, Midnight, Aurora). |
+| **Color** | Foreground hex, background solid swatches. **Background → Image**: 22 brand cells (see `QRBackgroundTemplateCatalog.brandItems`: Instagram, WhatsApp, Facebook, Pinterest, Viber, Snapchat, Skype, Spotify, YouTube, PayPal, TikTok, LINE, LinkedIn, WeChat, X, Bitcoin, Ethereum, BNB, Telegram, Messenger, Discord, Reddit). Brand selection paints the brand gradient plus a **subtle centred SF Symbol** (same identifier as the picker) into the inner QR card; the outer canvas stays white or shows the decorative template. |
 | **Logo** | Photo picker; scales to at most 22 % of QR width with a white backdrop. |
 | **Text** | Caption label drawn below the exported image. |
 | **Dots** | 4 module shapes: Square, Rounded, Dot, Diamond. |
 | **Eyes** | 12 finder-eye styles (see table below). |
 
-The panel toolbar uses **direction-aware slide transitions**: switching from Template → Color slides the new panel in from the right; switching back slides it in from the left. The selected tool icon bounces with an underdamped spring. The QR preview **cross-fades** on each new render instead of swapping instantly.
+Customize toolbar and preview animations: [Motion & transitions](#motion--transitions).
 
 #### 12 finder-eye styles
 
@@ -76,7 +87,20 @@ All finder-eye voids use an **even-odd fill rule** so the background (solid, tem
 
 ### Brand icon cells
 
-`BrandIconView` loads the real brand logo from the **Clearbit CDN** (`logo.clearbit.com`) when online, overlaid on the brand's gradient background using `.blendMode(.screen)`. Falls back to custom-drawn letter marks / SF Symbol composites when offline. Renders at 90 % opacity.
+`BrandIconView` (Color panel grid only) loads the real brand logo from the **Clearbit CDN** (`logo.clearbit.com`) when online, overlaid on the brand's gradient using `.blendMode(.screen)`. Falls back to custom-drawn marks / SF Symbol composites when offline. Whole cell at **90 % opacity**.
+
+The **exported QR** does not embed remote bitmaps: `QRStyleRenderer` draws the inner card with the same gradient colours and a low-opacity **system SF Symbol** for that brand so exports stay fast, offline-safe, and consistent with the picker’s icon family.
+
+### Motion & transitions
+
+| Area | Behaviour | Primary types / files |
+|------|-----------|-------------------------|
+| **Root tabs** | Custom tab bar; inactive tabs are opacity-hidden with a small horizontal offset and scale; spring animation on change; selected tab icon scales up with a spring. All four `NavigationStack`s remain mounted so camera, navigation, and scroll state persist. | `MainTabView.swift` |
+| **Home** | Header → primary cards → quick actions → trending appear in sequence (slide up + fade, staggered delays). | `HomeView.swift` |
+| **Create** | Selected payload type icon springs to ~108 %; changing type re-identifies the input block with asymmetric slide + opacity. Type grid buttons use `PressScaleButtonStyle`. | `QRCreateView.swift`, `PressScaleButtonStyle.swift` |
+| **Customize** | Opening / switching panels uses direction-aware slide (based on panel order) + opacity; tool icons scale when active; each finished QR render bumps `renderVersion` so the preview image cross-fades. | `QRCustomizeView.swift` |
+
+Shared press feedback: `PressScaleButtonStyle` (configurable scale) — used on home cards, quick-action grid, and create type cells.
 
 ---
 
@@ -124,7 +148,7 @@ QRCodeMaster/QRCodeMaster/
 │   ├── ShareSheet.swift
 │   └── PhotoLibrarySaver.swift
 ├── AppEnvironment.swift
-├── MainTabView.swift
+├── MainTabView.swift               # Custom animated tab bar; four persistent NavigationStacks
 ├── QRCodeMasterApp.swift
 └── ModelContainer+App.swift
 ```

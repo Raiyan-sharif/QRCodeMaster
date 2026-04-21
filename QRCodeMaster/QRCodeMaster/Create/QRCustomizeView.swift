@@ -595,14 +595,14 @@ struct QRCustomizeView: View {
                 .padding(.top, 14)
 
             LazyVGrid(
-                columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 4),
-                spacing: 12
+                columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 5),
+                spacing: 10
             ) {
                 ForEach(QRStyleOptions.ModuleShape.allCases, id: \.rawValue) { shape in
                     Button { style.moduleShape = shape } label: {
                         VStack(spacing: 6) {
                             ModuleShapePreview(shape: shape)
-                                .frame(width: 52, height: 52)
+                                .frame(width: 48, height: 48)
                                 .background(Color(.secondarySystemFill), in: RoundedRectangle(cornerRadius: 10))
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 10)
@@ -780,6 +780,20 @@ private struct ModuleShapePreview: View {
                 case .square:   path = Path(rect)
                 case .rounded:  path = Path(roundedRect: rect, cornerRadius: rect.width * 0.3)
                 case .dot:      path = Path(ellipseIn: rect)
+                case .dots:
+                    let pad = rect.width * 0.1
+                    let inner = rect.insetBy(dx: pad, dy: pad)
+                    let cw = inner.width / 3, ch = inner.height / 3
+                    let dr = min(cw, ch) * 0.34
+                    for row in 0..<3 {
+                        for col in 0..<3 {
+                            let cx = inner.minX + cw * (CGFloat(col) + 0.5)
+                            let cy = inner.minY + ch * (CGFloat(row) + 0.5)
+                            let er = CGRect(x: cx - dr, y: cy - dr, width: dr * 2, height: dr * 2)
+                            ctx.fill(Path(ellipseIn: er), with: color)
+                        }
+                    }
+                    continue
                 case .diamond:
                     var p = Path()
                     let cx = rect.midX, cy = rect.midY, half = rect.width * 0.5

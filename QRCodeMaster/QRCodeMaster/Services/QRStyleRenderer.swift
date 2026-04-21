@@ -205,6 +205,19 @@ enum QRStyleRenderer {
         case .dot:
             let d = min(rect.width, rect.height) * 0.78
             ctx.fillEllipse(in: CGRect(x: rect.midX - d / 2, y: rect.midY - d / 2, width: d, height: d))
+        case .dots:
+            let pad = min(rect.width, rect.height) * 0.08
+            let inner = rect.insetBy(dx: pad, dy: pad)
+            let cellW = inner.width / 3
+            let cellH = inner.height / 3
+            let r = min(cellW, cellH) * 0.38
+            for row in 0..<3 {
+                for col in 0..<3 {
+                    let cx = inner.minX + cellW * (CGFloat(col) + 0.5)
+                    let cy = inner.minY + cellH * (CGFloat(row) + 0.5)
+                    ctx.fillEllipse(in: CGRect(x: cx - r, y: cy - r, width: r * 2, height: r * 2))
+                }
+            }
         case .diamond:
             let center = CGPoint(x: rect.midX, y: rect.midY)
             let half = min(rect.width, rect.height) * 0.42

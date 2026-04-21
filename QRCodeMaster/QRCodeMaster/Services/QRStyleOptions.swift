@@ -29,6 +29,8 @@ struct QRStyleOptions: Codable, Equatable, Sendable {
         case square
         case rounded
         case dot
+        /// Nine small circles per module (halftone-style), distinct from single `dot`.
+        case dots
         case diamond    // rotated square
 
         var displayName: String {
@@ -36,6 +38,7 @@ struct QRStyleOptions: Codable, Equatable, Sendable {
             case .square:  "Square"
             case .rounded: "Rounded"
             case .dot:     "Dot"
+            case .dots:    "Dots"
             case .diamond: "Diamond"
             }
         }

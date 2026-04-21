@@ -56,7 +56,7 @@ Type selection and input-area transitions are described under [Motion & transiti
 | **Color** | Foreground hex, background solid swatches. **Background → Image**: 22 brand cells (see `QRBackgroundTemplateCatalog.brandItems`: Instagram, WhatsApp, Facebook, Pinterest, Viber, Snapchat, Skype, Spotify, YouTube, PayPal, TikTok, LINE, LinkedIn, WeChat, X, Bitcoin, Ethereum, BNB, Telegram, Messenger, Discord, Reddit). Brand selection paints the brand gradient plus a **subtle centred SF Symbol** (same identifier as the picker) into the inner QR card; the outer canvas stays white or shows the decorative template. |
 | **Logo** | Photo picker; scales to at most 22 % of QR width with a white backdrop. |
 | **Text** | Caption label drawn below the exported image. |
-| **Dots** | 4 module shapes: Square, Rounded, Dot, Diamond. |
+| **Dots** | 5 module shapes: Square, Rounded, Dot, Dots (3×3 halftone cluster per module), Diamond. |
 | **Eyes** | 12 finder-eye styles (see table below). |
 
 Customize toolbar and preview animations: [Motion & transitions](#motion--transitions).

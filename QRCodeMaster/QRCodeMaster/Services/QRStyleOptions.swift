@@ -29,17 +29,21 @@ struct QRStyleOptions: Codable, Equatable, Sendable {
         case square
         case rounded
         case dot
-        /// Nine small circles per module (halftone-style), distinct from single `dot`.
-        case dots
+        /// N×N circle grids per module (halftone-style), distinct from single `dot`.
+        case dots2x2
+        case dots       // 3×3 — raw value `dots` keeps older saved JSON working
+        case dots4x4
         case diamond    // rotated square
 
         var displayName: String {
             switch self {
-            case .square:  "Square"
-            case .rounded: "Rounded"
-            case .dot:     "Dot"
-            case .dots:    "Dots"
-            case .diamond: "Diamond"
+            case .square:    "Square"
+            case .rounded:   "Rounded"
+            case .dot:       "Dot"
+            case .dots2x2:   "2×2 Dots"
+            case .dots:      "3×3 Dots"
+            case .dots4x4:   "4×4 Dots"
+            case .diamond:   "Diamond"
             }
         }
     }

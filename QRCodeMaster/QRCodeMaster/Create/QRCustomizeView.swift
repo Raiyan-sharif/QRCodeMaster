@@ -595,14 +595,14 @@ struct QRCustomizeView: View {
                 .padding(.top, 14)
 
             LazyVGrid(
-                columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 5),
+                columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 4),
                 spacing: 10
             ) {
                 ForEach(QRStyleOptions.ModuleShape.allCases, id: \.rawValue) { shape in
                     Button { style.moduleShape = shape } label: {
                         VStack(spacing: 6) {
                             ModuleShapePreview(shape: shape)
-                                .frame(width: 48, height: 48)
+                                .frame(width: 46, height: 46)
                                 .background(Color(.secondarySystemFill), in: RoundedRectangle(cornerRadius: 10))
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 10)
@@ -780,19 +780,14 @@ private struct ModuleShapePreview: View {
                 case .square:   path = Path(rect)
                 case .rounded:  path = Path(roundedRect: rect, cornerRadius: rect.width * 0.3)
                 case .dot:      path = Path(ellipseIn: rect)
+                case .dots2x2:
+                    fillMiniDotGrid(ctx: ctx, rect: rect, color: color, divisions: 2)
+                    continue
                 case .dots:
-                    let pad = rect.width * 0.1
-                    let inner = rect.insetBy(dx: pad, dy: pad)
-                    let cw = inner.width / 3, ch = inner.height / 3
-                    let dr = min(cw, ch) * 0.34
-                    for row in 0..<3 {
-                        for col in 0..<3 {
-                            let cx = inner.minX + cw * (CGFloat(col) + 0.5)
-                            let cy = inner.minY + ch * (CGFloat(row) + 0.5)
-                            let er = CGRect(x: cx - dr, y: cy - dr, width: dr * 2, height: dr * 2)
-                            ctx.fill(Path(ellipseIn: er), with: color)
-                        }
-                    }
+                    fillMiniDotGrid(ctx: ctx, rect: rect, color: color, divisions: 3)
+                    continue
+                case .dots4x4:
+                    fillMiniDotGrid(ctx: ctx, rect: rect, color: color, divisions: 4)
                     continue
                 case .diamond:
                     var p = Path()
@@ -808,6 +803,23 @@ private struct ModuleShapePreview: View {
             }
         }
         .padding(8)
+    }
+
+    private func fillMiniDotGrid(ctx: GraphicsContext, rect: CGRect, color: GraphicsContext.Shading, divisions n: Int) {
+        let pad = rect.width * (n >= 4 ? 0.08 : 0.1)
+        let inner = rect.insetBy(dx: pad, dy: pad)
+        let cw = inner.width / CGFloat(n)
+        let ch = inner.height / CGFloat(n)
+        let drScale: CGFloat = n == 2 ? 0.38 : (n == 3 ? 0.34 : 0.27)
+        let dr = min(cw, ch) * drScale
+        for row in 0..<n {
+            for col in 0..<n {
+                let cx = inner.minX + cw * (CGFloat(col) + 0.5)
+                let cy = inner.minY + ch * (CGFloat(row) + 0.5)
+                let er = CGRect(x: cx - dr, y: cy - dr, width: dr * 2, height: dr * 2)
+                ctx.fill(Path(ellipseIn: er), with: color)
+            }
+        }
     }
 }
 

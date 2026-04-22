@@ -205,19 +205,15 @@ enum QRStyleRenderer {
         case .dot:
             let d = min(rect.width, rect.height) * 0.78
             ctx.fillEllipse(in: CGRect(x: rect.midX - d / 2, y: rect.midY - d / 2, width: d, height: d))
-        case .dots:
-            let pad = min(rect.width, rect.height) * 0.08
-            let inner = rect.insetBy(dx: pad, dy: pad)
-            let cellW = inner.width / 3
-            let cellH = inner.height / 3
-            let r = min(cellW, cellH) * 0.38
-            for row in 0..<3 {
-                for col in 0..<3 {
-                    let cx = inner.minX + cellW * (CGFloat(col) + 0.5)
-                    let cy = inner.minY + cellH * (CGFloat(row) + 0.5)
-                    ctx.fillEllipse(in: CGRect(x: cx - r, y: cy - r, width: r * 2, height: r * 2))
+        case .dots2x2, .dots, .dots4x4:
+            let n: Int = {
+                switch shape {
+                case .dots2x2: return 2
+                case .dots4x4: return 4
+                default:       return 3
                 }
-            }
+            }()
+            fillDotGrid(in: rect, context: ctx, divisions: n)
         case .diamond:
             let center = CGPoint(x: rect.midX, y: rect.midY)
             let half = min(rect.width, rect.height) * 0.42
@@ -228,6 +224,25 @@ enum QRStyleRenderer {
             path.addLine(to: CGPoint(x: center.x - half, y: center.y))
             path.closeSubpath()
             ctx.addPath(path); ctx.fillPath()
+        }
+    }
+
+    /// Fills `rect` with an N×N grid of circles (each dark module = halftone cluster).
+    private static func fillDotGrid(in rect: CGRect, context ctx: CGContext, divisions n: Int) {
+        guard n >= 2 else { return }
+        let padFrac: CGFloat = n >= 4 ? 0.06 : 0.08
+        let pad = min(rect.width, rect.height) * padFrac
+        let inner = rect.insetBy(dx: pad, dy: pad)
+        let cellW = inner.width / CGFloat(n)
+        let cellH = inner.height / CGFloat(n)
+        let rScale: CGFloat = (n == 2) ? 0.42 : (n == 3 ? 0.38 : 0.30)
+        let r = min(cellW, cellH) * rScale
+        for row in 0..<n {
+            for col in 0..<n {
+                let cx = inner.minX + cellW * (CGFloat(col) + 0.5)
+                let cy = inner.minY + cellH * (CGFloat(row) + 0.5)
+                ctx.fillEllipse(in: CGRect(x: cx - r, y: cy - r, width: r * 2, height: r * 2))
+            }
         }
     }
 

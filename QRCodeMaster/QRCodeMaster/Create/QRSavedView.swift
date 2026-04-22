@@ -22,6 +22,7 @@ struct QRSavedView: View {
     @State private var showComingSoon = false
     @State private var savePhotoError: String?
     @State private var showPhotoError = false
+    @State private var verificationOutcome: QRImageVerifier.Outcome = .idle
 
     private let teal = Color(red: 0.18, green: 0.72, blue: 0.65)
 
@@ -38,13 +39,7 @@ struct QRSavedView: View {
                         .foregroundStyle(.primary)
                 }
 
-                // Verify button
-                Label("Verify QR Code", systemImage: "qrcode.viewfinder")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(teal)
-                    .padding(.vertical, 8)
-                    .padding(.horizontal, 18)
-                    .background(teal.opacity(0.1), in: Capsule())
+                verifySection
 
                 // Action buttons
                 HStack(spacing: 20) {
@@ -90,6 +85,127 @@ struct QRSavedView: View {
             Button("OK", role: .cancel) {}
         } message: {
             Text("Widget support will be available in a future update.")
+        }
+    }
+
+    // MARK: - Verify QR
+
+    private var verifySection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Button {
+                Task { await verifyTapped() }
+            } label: {
+                HStack(spacing: 8) {
+                    if verificationOutcome == .verifying {
+                        ProgressView()
+                            .tint(teal)
+                    } else {
+                        Image(systemName: "qrcode.viewfinder")
+                    }
+                    Text(verificationOutcome == .verifying ? "Verifying…" : "Verify QR Code")
+                        .font(.subheadline.weight(.semibold))
+                }
+                .foregroundStyle(teal)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .padding(.horizontal, 18)
+                .background(teal.opacity(0.12), in: Capsule())
+            }
+            .buttonStyle(.plain)
+            .disabled(verificationOutcome == .verifying)
+
+            if verificationOutcome != .idle && verificationOutcome != .verifying {
+                verificationResultBanner
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        .animation(.easeInOut(duration: 0.22), value: verificationOutcome)
+    }
+
+    @MainActor
+    private func verifyTapped() async {
+        verificationOutcome = .verifying
+        let result = await QRImageVerifier.verify(image: image, expectedPayload: payload)
+        verificationOutcome = result
+    }
+
+    @ViewBuilder
+    private var verificationResultBanner: some View {
+        switch verificationOutcome {
+        case .idle, .verifying:
+            EmptyView()
+
+        case .validMatchesContent:
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.title2)
+                    .foregroundStyle(.green)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Valid QR code")
+                        .font(.subheadline.weight(.semibold))
+                    Text("The image decodes successfully and matches your saved content.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.green.opacity(0.12), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+
+        case .readablePayloadMismatch(let found):
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.title2)
+                    .foregroundStyle(.orange)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Readable, but different text")
+                        .font(.subheadline.weight(.semibold))
+                    Text("Vision decoded a QR, but the string does not match what you saved.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text(found)
+                        .font(.caption2.monospaced())
+                        .foregroundStyle(.primary)
+                        .lineLimit(6)
+                }
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+
+        case .couldNotReadFromImage:
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.title2)
+                    .foregroundStyle(.red.opacity(0.85))
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Could not read this image")
+                        .font(.subheadline.weight(.semibold))
+                    Text("No QR code was detected. Heavy styling or low contrast can block scanners; try a simpler template or higher error correction.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.red.opacity(0.1), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+
+        case .failed(let message):
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: "exclamationmark.circle.fill")
+                    .font(.title2)
+                    .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Verification failed")
+                        .font(.subheadline.weight(.semibold))
+                    Text(message)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color(.secondarySystemFill), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
     }
 

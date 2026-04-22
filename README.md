@@ -28,7 +28,7 @@ An iOS app for **creating**, **customising**, and **scanning** QR codes and barc
 | Tab | Description |
 |-----|-------------|
 | **Home** | Quick-create shortcuts (QR / Barcode), template gallery preview, trending-style cards, gear icon opens **Mine**. Staggered entrance on appear; primary cards and quick actions use press-scale feedback. |
-| **Template** | Browse procedural background templates (Sunset, Ocean, Forest, Paper, Grid, …) organized by category. Tapping opens the full Create → Customize flow with the template pre-loaded. |
+| **Template** | **27** procedural full-canvas backgrounds, each assigned to **exactly one** gallery filter: **Hot**, **Social**, **Love**, **Vcard**, **Business**, **Wifi** (no template is listed under more than one tab). Tapping a cell opens Create → Customize with that template pre-selected. |
 | **Scan** | Camera scanner for QR codes and all major barcode formats. Safe URL opening for `http`/`https`; all other payloads can be copied. |
 | **Drafts** | SwiftData-backed library with folders, favorites, full-text search, detail view, share, and save-to-photos. |
 
@@ -52,7 +52,7 @@ Type selection and input-area transitions are described under [Motion & transiti
 
 | Panel | Options |
 |-------|---------|
-| **Template** | **None** plus 8 full-canvas procedural backgrounds (Sunset, Ocean, Forest, Paper, Soft grid, Dots, Midnight, Aurora). |
+| **Template** | **None** plus all catalog templates in a horizontal strip. Same **27** built-in styles as the Template tab (`QRBackgroundTemplateCatalog.allTemplates`); categories are for the gallery only — the customizer lists every style in one row. |
 | **Color** | Foreground hex, background solid swatches. **Background → Image**: 22 brand cells (see `QRBackgroundTemplateCatalog.brandItems`: Instagram, WhatsApp, Facebook, Pinterest, Viber, Snapchat, Skype, Spotify, YouTube, PayPal, TikTok, LINE, LinkedIn, WeChat, X, Bitcoin, Ethereum, BNB, Telegram, Messenger, Discord, Reddit). Brand selection paints the brand gradient plus a **subtle centred SF Symbol** (same identifier as the picker) into the inner QR card; the outer canvas stays white or shows the decorative template. |
 | **Logo** | Photo picker; scales to at most 22 % of QR width with a white backdrop. |
 | **Text** | Caption label drawn below the exported image. |
@@ -129,7 +129,7 @@ QRCodeMaster/QRCodeMaster/
 │   ├── QRStyleRenderer.swift            # CoreGraphics renderer (background, modules, eyes, logo, frame, caption)
 │   ├── QRStyleOptions.swift             # Style model — Codable, Equatable, backward-compat
 │   ├── QRPayloadEncoder.swift           # 31 payload types + structured payload structs
-│   ├── QRBackgroundTemplateCatalog.swift # 8 decorative templates + 22 brand items
+│   ├── QRBackgroundTemplateCatalog.swift # 27 categorized decorative templates + 22 brand items
 │   ├── BarcodeGeneratorService.swift
 │   └── EAN13Encoder.swift
 ├── Shared/
@@ -167,6 +167,7 @@ QRCodeMaster/QRCodeMaster/
 | `renderVersion` Int bumped per render | Gives each QR image a unique `.id()` so SwiftUI replaces it with a cross-fade transition rather than an in-place swap. |
 | `PressScaleButtonStyle` with configurable `scale` | Centralises press-feedback so every tappable surface (primary cards, grid buttons, type icons) shares one consistent spring curve. |
 | Direction-aware panel slide in `QRCustomizeView` | `prevPanel` index comparison determines `.leading` vs `.trailing` edge so the panel always slides in the intuitive direction. |
+| Template gallery partition | `CatalogEntry.category` assigns each decorative ID to a single `GalleryCategory`; `templates(in:)` filters so Hot / Social / Love / Vcard / Business / Wifi lists never overlap. |
 
 ---
 

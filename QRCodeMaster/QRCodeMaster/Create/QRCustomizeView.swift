@@ -6,6 +6,7 @@
 import PhotosUI
 import SwiftData
 import SwiftUI
+import UIKit
 
 struct QRCustomizeView: View {
     let payload: String
@@ -31,6 +32,9 @@ struct QRCustomizeView: View {
 
     // Color panel state
     @State private var colorTab: ColorTab = .foreground
+
+    /// Picks JPEG data stored in `style.moduleDotPatternJPEG` for `ModuleShape.photoDots`.
+    @State private var moduleDotPickerItem: PhotosPickerItem?
 
     // Text panel state
     @State private var editCaption: String = ""
@@ -140,6 +144,7 @@ struct QRCustomizeView: View {
         .onChange(of: style)     { _, _ in regenerate() }
         .onChange(of: logoImage) { _, _ in regenerate() }
         .onChange(of: logoItem)  { _, new in loadLogo(new) }
+        .onChange(of: moduleDotPickerItem) { _, new in loadModuleDotPhoto(new) }
     }
 
     // MARK: - Preview section
@@ -588,36 +593,90 @@ struct QRCustomizeView: View {
     // MARK: - Dots panel
 
     private var dotsPanel: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Module Shape")
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Photo as dots")
                 .font(.subheadline.weight(.semibold))
                 .padding(.horizontal, 16)
                 .padding(.top, 14)
 
-            LazyVGrid(
-                columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 4),
-                spacing: 10
-            ) {
-                ForEach(QRStyleOptions.ModuleShape.allCases, id: \.rawValue) { shape in
-                    Button { style.moduleShape = shape } label: {
-                        VStack(spacing: 6) {
-                            ModuleShapePreview(shape: shape)
-                                .frame(width: 46, height: 46)
-                                .background(Color(.secondarySystemFill), in: RoundedRectangle(cornerRadius: 10))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 10)
-                                        .stroke(style.moduleShape == shape ? Color(red: 0.18, green: 0.72, blue: 0.65) : Color.clear, lineWidth: 2.5)
-                                )
-                            Text(shape.displayName)
-                                .font(.system(size: 10, weight: .medium))
-                                .foregroundStyle(.primary)
+            PhotosPicker(selection: $moduleDotPickerItem, matching: .images) {
+                HStack(spacing: 12) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .fill(Color(.secondarySystemFill))
+                            .frame(width: 56, height: 56)
+                        if let data = style.moduleDotPatternJPEG,
+                           let ui = UIImage(data: data) {
+                            Image(uiImage: ui)
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 56, height: 56)
+                                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        } else {
+                            Image(systemName: "photo.badge.plus")
+                                .font(.title2)
+                                .foregroundStyle(.secondary)
                         }
                     }
-                    .buttonStyle(.plain)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Choose image")
+                            .font(.subheadline.weight(.semibold))
+                        Text("Each dark module shows a circular clip of this photo (tiled across the QR). Choose “Photo dots” in the grid below to use it.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 0)
                 }
+                .padding(12)
+                .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
+            .buttonStyle(.plain)
             .padding(.horizontal, 16)
-            .padding(.bottom, 14)
+
+            if style.moduleShape == .photoDots && style.moduleDotPatternJPEG == nil {
+                Text("Add a photo above, or pick another module shape.")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                    .padding(.horizontal, 16)
+            }
+
+            Text("Module Shape")
+                .font(.subheadline.weight(.semibold))
+                .padding(.horizontal, 16)
+
+            ScrollView {
+                LazyVGrid(
+                    columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 4),
+                    spacing: 10
+                ) {
+                    ForEach(QRStyleOptions.ModuleShape.allCases, id: \.rawValue) { shape in
+                        Button {
+                            style.moduleShape = shape
+                        } label: {
+                            VStack(spacing: 6) {
+                                ModuleShapePreview(shape: shape, photoThumbnail: style.moduleDotPatternJPEG.flatMap { UIImage(data: $0) })
+                                    .frame(width: 46, height: 46)
+                                    .background(Color(.secondarySystemFill), in: RoundedRectangle(cornerRadius: 10))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 10)
+                                            .stroke(style.moduleShape == shape ? Color(red: 0.18, green: 0.72, blue: 0.65) : Color.clear, lineWidth: 2.5)
+                                    )
+                                Text(shape.displayName)
+                                    .font(.system(size: 10, weight: .medium))
+                                    .foregroundStyle(.primary)
+                                    .lineLimit(2)
+                                    .minimumScaleFactor(0.75)
+                                    .multilineTextAlignment(.center)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 14)
+            }
+            .frame(maxHeight: 320)
         }
     }
 
@@ -712,6 +771,37 @@ struct QRCustomizeView: View {
         }
     }
 
+    private func loadModuleDotPhoto(_ item: PhotosPickerItem?) {
+        guard let item else { return }
+        Task {
+            guard let data = try? await item.loadTransferable(type: Data.self),
+                  let ui = UIImage(data: data) else { return }
+            let jpeg = Self.compressImageToJPEG(ui, maxSide: 512, quality: 0.82)
+            await MainActor.run {
+                style.moduleDotPatternJPEG = jpeg
+                style.moduleShape = .photoDots
+            }
+        }
+    }
+
+    /// Downscales large photos before embedding in `QRStyleOptions` / SwiftData JSON.
+    private static func compressImageToJPEG(_ image: UIImage, maxSide: CGFloat, quality: CGFloat) -> Data? {
+        let w = image.size.width * image.scale
+        let h = image.size.height * image.scale
+        let scale = min(1, maxSide / max(w, h))
+        if scale >= 0.999 {
+            return image.jpegData(compressionQuality: quality)
+        }
+        let newSize = CGSize(width: max(1, w * scale), height: max(1, h * scale))
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        let renderer = UIGraphicsImageRenderer(size: newSize, format: format)
+        let img = renderer.image { _ in
+            image.draw(in: CGRect(origin: .zero, size: newSize))
+        }
+        return img.jpegData(compressionQuality: quality)
+    }
+
     private func doSave() {
         guard let img = rendered, let data = img.pngData() else { return }
         let json = try? JSONEncoder().encode(style)
@@ -763,55 +853,91 @@ private struct PhotoPickerBrandCell: View {
 
 private struct ModuleShapePreview: View {
     let shape: QRStyleOptions.ModuleShape
+    var photoThumbnail: UIImage? = nil
 
     private let grid = [(0,0),(0,1),(0,2),(1,0),(1,2),(2,0),(2,1),(2,2)]
-    private let side: CGFloat = 9
 
     var body: some View {
-        Canvas { ctx, size in
-            let step = (size.width - 2) / 3
-            let color = GraphicsContext.Shading.color(.black)
-            for (r, c) in grid {
-                let x = 1 + CGFloat(c) * step + step * 0.1
-                let y = 1 + CGFloat(r) * step + step * 0.1
-                let rect = CGRect(x: x, y: y, width: step * 0.8, height: step * 0.8)
-                let path: Path
-                switch shape {
-                case .square:   path = Path(rect)
-                case .rounded:  path = Path(roundedRect: rect, cornerRadius: rect.width * 0.3)
-                case .dot:      path = Path(ellipseIn: rect)
-                case .dots2x2:
-                    fillMiniDotGrid(ctx: ctx, rect: rect, color: color, divisions: 2)
-                    continue
-                case .dots:
-                    fillMiniDotGrid(ctx: ctx, rect: rect, color: color, divisions: 3)
-                    continue
-                case .dots4x4:
-                    fillMiniDotGrid(ctx: ctx, rect: rect, color: color, divisions: 4)
-                    continue
-                case .diamond:
-                    var p = Path()
-                    let cx = rect.midX, cy = rect.midY, half = rect.width * 0.5
-                    p.move(to: CGPoint(x: cx, y: cy - half))
-                    p.addLine(to: CGPoint(x: cx + half, y: cy))
-                    p.addLine(to: CGPoint(x: cx, y: cy + half))
-                    p.addLine(to: CGPoint(x: cx - half, y: cy))
-                    p.closeSubpath()
-                    path = p
+        Group {
+            if shape == .photoDots {
+                if let photoThumbnail {
+                    Image(uiImage: photoThumbnail)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 36, height: 36)
+                        .clipShape(Circle())
+                } else {
+                    Image(systemName: "photo.circle.fill")
+                        .font(.system(size: 28, weight: .medium))
+                        .foregroundStyle(.secondary)
                 }
-                ctx.fill(path, with: color)
+            } else {
+                Canvas { ctx, size in
+                    let step = (size.width - 2) / 3
+                    let color = GraphicsContext.Shading.color(.black)
+                    for (r, c) in grid {
+                        let x = 1 + CGFloat(c) * step + step * 0.1
+                        let y = 1 + CGFloat(r) * step + step * 0.1
+                        let rect = CGRect(x: x, y: y, width: step * 0.8, height: step * 0.8)
+                        let path: Path
+                        switch shape {
+                        case .square:   path = Path(rect)
+                        case .rounded:  path = Path(roundedRect: rect, cornerRadius: rect.width * 0.3)
+                        case .dot:      path = Path(ellipseIn: rect)
+                        case .dots2x2:
+                            fillMiniDotGrid(ctx: ctx, rect: rect, color: color, divisions: 2)
+                            continue
+                        case .dots:
+                            fillMiniDotGrid(ctx: ctx, rect: rect, color: color, divisions: 3)
+                            continue
+                        case .dots4x4:
+                            fillMiniDotGrid(ctx: ctx, rect: rect, color: color, divisions: 4)
+                            continue
+                        case .dots5x5:
+                            fillMiniDotGrid(ctx: ctx, rect: rect, color: color, divisions: 5)
+                            continue
+                        case .dots3x2:
+                            fillMiniDots3x2(ctx: ctx, rect: rect, color: color)
+                            continue
+                        case .dotsPlus:
+                            fillMiniDotsPlus(ctx: ctx, rect: rect, color: color)
+                            continue
+                        case .diamond:
+                            var p = Path()
+                            let cx = rect.midX, cy = rect.midY
+                            let half = min(rect.width, rect.height) * 0.49
+                            p.move(to: CGPoint(x: cx, y: cy - half))
+                            p.addLine(to: CGPoint(x: cx + half, y: cy))
+                            p.addLine(to: CGPoint(x: cx, y: cy + half))
+                            p.addLine(to: CGPoint(x: cx - half, y: cy))
+                            p.closeSubpath()
+                            path = p
+                        case .photoDots:
+                            continue
+                        }
+                        ctx.fill(path, with: color)
+                    }
+                }
             }
         }
         .padding(8)
     }
 
     private func fillMiniDotGrid(ctx: GraphicsContext, rect: CGRect, color: GraphicsContext.Shading, divisions n: Int) {
-        let pad = rect.width * (n >= 4 ? 0.08 : 0.1)
+        let pad = min(rect.width, rect.height) * 0.02
         let inner = rect.insetBy(dx: pad, dy: pad)
         let cw = inner.width / CGFloat(n)
         let ch = inner.height / CGFloat(n)
-        let drScale: CGFloat = n == 2 ? 0.38 : (n == 3 ? 0.34 : 0.27)
-        let dr = min(cw, ch) * drScale
+        let cell = min(cw, ch)
+        let drScale: CGFloat = {
+            switch n {
+            case 2: return 0.62
+            case 3: return 0.55
+            case 4: return 0.52
+            default: return 0.50
+            }
+        }()
+        let dr = cell * drScale
         for row in 0..<n {
             for col in 0..<n {
                 let cx = inner.minX + cw * (CGFloat(col) + 0.5)
@@ -819,6 +945,40 @@ private struct ModuleShapePreview: View {
                 let er = CGRect(x: cx - dr, y: cy - dr, width: dr * 2, height: dr * 2)
                 ctx.fill(Path(ellipseIn: er), with: color)
             }
+        }
+    }
+
+    private func fillMiniDots3x2(ctx: GraphicsContext, rect: CGRect, color: GraphicsContext.Shading) {
+        let pad = min(rect.width, rect.height) * 0.02
+        let inner = rect.insetBy(dx: pad, dy: pad)
+        let cols = 3, rows = 2
+        let cw = inner.width / CGFloat(cols)
+        let ch = inner.height / CGFloat(rows)
+        let cell = min(cw, ch)
+        let dr = cell * 0.58
+        for row in 0..<rows {
+            for col in 0..<cols {
+                let cx = inner.minX + cw * (CGFloat(col) + 0.5)
+                let cy = inner.minY + ch * (CGFloat(row) + 0.5)
+                let er = CGRect(x: cx - dr, y: cy - dr, width: dr * 2, height: dr * 2)
+                ctx.fill(Path(ellipseIn: er), with: color)
+            }
+        }
+    }
+
+    private func fillMiniDotsPlus(ctx: GraphicsContext, rect: CGRect, color: GraphicsContext.Shading) {
+        let pad = min(rect.width, rect.height) * 0.03
+        let inner = rect.insetBy(dx: pad, dy: pad)
+        let r = min(inner.width, inner.height) * 0.36
+        let positions: [(CGFloat, CGFloat)] = [
+            (0.5, 0.18), (0.5, 0.5), (0.5, 0.82),
+            (0.18, 0.5), (0.82, 0.5),
+        ]
+        for (px, py) in positions {
+            let cx = inner.minX + inner.width * px
+            let cy = inner.minY + inner.height * py
+            let er = CGRect(x: cx - r, y: cy - r, width: r * 2, height: r * 2)
+            ctx.fill(Path(ellipseIn: er), with: color)
         }
     }
 }

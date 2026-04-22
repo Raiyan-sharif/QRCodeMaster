@@ -90,11 +90,11 @@ enum QRStyleRenderer {
             ctx.fill(bounds)
         }
 
-        // ── Step 2: Brand icon — inner QR card area only ─────────────────────────
-        // Renders exactly what is shown in the Color panel cell:
-        //   • gradient fills the card background
-        //   • brand logo mark drawn centred at ~25 % opacity so it shows through the QR gaps
-        // Modules are painted on top of this in the user's chosen foreground colour.
+        // ── Step 2: Inner QR “card” fill only (same rounded rect as brand image layer) ──
+        // When `usesCardLayout` is true, the full-canvas layer (Step 1) is separate from the
+        // matrix backdrop. Brand gradients **or** Colour › Background solid swatch must paint
+        // this inner card so module gaps match the picker (template alone would otherwise show
+        // through every gap).
         if hasBrand,
            let brand = QRBackgroundTemplateCatalog.brandItems.first(where: { $0.id == brandId }),
            let c1 = UIColor(hex: brand.startHex),
@@ -106,12 +106,10 @@ enum QRStyleRenderer {
                locations: [0.0, 1.0]
            ) {
             ctx.saveGState()
-            // Clip everything in this step to the rounded card rect
             let cardClip = UIBezierPath(roundedRect: qrRect, cornerRadius: qrRect.width * 0.05)
             ctx.addPath(cardClip.cgPath)
             ctx.clip()
 
-            // 1 — gradient background
             ctx.drawLinearGradient(
                 gradient,
                 start: qrRect.origin,
@@ -119,13 +117,10 @@ enum QRStyleRenderer {
                 options: [.drawsBeforeStartLocation, .drawsAfterEndLocation]
             )
 
-            // 2 — brand logo mark centred in the card at ~22 % opacity
-            //     Uses the same SF Symbol the Color-panel cell shows.
-            let iconPt  = qrRect.width * 0.55          // point size for the symbol
+            let iconPt  = qrRect.width * 0.55
             let symConf = UIImage.SymbolConfiguration(pointSize: iconPt, weight: .bold)
             if let sym = UIImage(systemName: brand.sfSymbol, withConfiguration: symConf)?
                 .withTintColor(.white, renderingMode: .alwaysOriginal) {
-                // Scale to fill ~55 % of the card
                 let iw = qrRect.width  * 0.55
                 let ih = qrRect.height * 0.55
                 let ir = CGRect(x: qrRect.midX - iw / 2,
@@ -135,9 +130,20 @@ enum QRStyleRenderer {
             }
 
             ctx.restoreGState()
+        } else if usesCardLayout {
+            // Solid Colour › `backgroundHex` on the inner card (same geometry as brand).
+            ctx.saveGState()
+            let cardClip = UIBezierPath(roundedRect: qrRect, cornerRadius: qrRect.width * 0.05)
+            ctx.addPath(cardClip.cgPath)
+            ctx.clip()
+            ctx.setFillColor(bg.cgColor)
+            ctx.fill(qrRect)
+            ctx.restoreGState()
         }
 
         let logoBackdrop: UIColor = usesCardLayout ? UIColor.white.withAlphaComponent(0.9) : bg
+
+        let moduleDotImage = options.moduleDotPatternJPEG.flatMap { UIImage(data: $0) }
 
         // ── Draw data modules — skip the three 7×7 finder regions entirely ───────
         for r in 0..<n {
@@ -150,7 +156,14 @@ enum QRStyleRenderer {
                     width: moduleScale,
                     height: moduleScale
                 )
-                drawDataModule(in: rect, context: ctx, color: fg, shape: options.moduleShape)
+                drawDataModule(
+                    in: rect,
+                    context: ctx,
+                    color: fg,
+                    shape: options.moduleShape,
+                    patternImage: moduleDotImage,
+                    qrRect: qrRect
+                )
             }
         }
 
@@ -193,7 +206,14 @@ enum QRStyleRenderer {
 
     // MARK: - Module drawing
 
-    private static func drawDataModule(in rect: CGRect, context ctx: CGContext, color: UIColor, shape: QRStyleOptions.ModuleShape) {
+    private static func drawDataModule(
+        in rect: CGRect,
+        context ctx: CGContext,
+        color: UIColor,
+        shape: QRStyleOptions.ModuleShape,
+        patternImage: UIImage?,
+        qrRect: CGRect
+    ) {
         ctx.setFillColor(color.cgColor)
         switch shape {
         case .square:
@@ -205,18 +225,42 @@ enum QRStyleRenderer {
         case .dot:
             let d = min(rect.width, rect.height) * 0.78
             ctx.fillEllipse(in: CGRect(x: rect.midX - d / 2, y: rect.midY - d / 2, width: d, height: d))
-        case .dots2x2, .dots, .dots4x4:
+        case .dots2x2, .dots, .dots4x4, .dots5x5:
             let n: Int = {
                 switch shape {
                 case .dots2x2: return 2
                 case .dots4x4: return 4
+                case .dots5x5: return 5
                 default:       return 3
                 }
             }()
+            // Clip so enlarged dots never bleed into neighbouring **white** modules.
+            ctx.saveGState()
+            ctx.addRect(rect)
+            ctx.clip()
             fillDotGrid(in: rect, context: ctx, divisions: n)
+            ctx.restoreGState()
+        case .dots3x2:
+            ctx.saveGState()
+            ctx.addRect(rect)
+            ctx.clip()
+            fillDots3x2(in: rect, context: ctx)
+            ctx.restoreGState()
+        case .dotsPlus:
+            ctx.saveGState()
+            ctx.addRect(rect)
+            ctx.clip()
+            fillDotsPlus(in: rect, context: ctx)
+            ctx.restoreGState()
+        case .photoDots:
+            drawPhotoDot(in: rect, context: ctx, patternImage: patternImage, qrRect: qrRect, fallbackColor: color)
         case .diamond:
+            ctx.saveGState()
+            ctx.addRect(rect)
+            ctx.clip()
             let center = CGPoint(x: rect.midX, y: rect.midY)
-            let half = min(rect.width, rect.height) * 0.42
+            // Rhombus nearly inscribed in the cell so timing/alignment patterns stay dark enough for decoders.
+            let half = min(rect.width, rect.height) * 0.49
             let path = CGMutablePath()
             path.move(to: CGPoint(x: center.x, y: center.y - half))
             path.addLine(to: CGPoint(x: center.x + half, y: center.y))
@@ -224,25 +268,116 @@ enum QRStyleRenderer {
             path.addLine(to: CGPoint(x: center.x - half, y: center.y))
             path.closeSubpath()
             ctx.addPath(path); ctx.fillPath()
+            ctx.restoreGState()
         }
     }
 
-    /// Fills `rect` with an N×N grid of circles (each dark module = halftone cluster).
+    /// Fills `rect` with an N×N grid of circles. Radii are tuned so adjacent micro-dots **overlap**
+    /// inside the module (high dark coverage) — required for Vision / camera decoders on styled QRs.
     private static func fillDotGrid(in rect: CGRect, context ctx: CGContext, divisions n: Int) {
         guard n >= 2 else { return }
-        let padFrac: CGFloat = n >= 4 ? 0.06 : 0.08
-        let pad = min(rect.width, rect.height) * padFrac
+        let pad = min(rect.width, rect.height) * 0.02
         let inner = rect.insetBy(dx: pad, dy: pad)
         let cellW = inner.width / CGFloat(n)
         let cellH = inner.height / CGFloat(n)
-        let rScale: CGFloat = (n == 2) ? 0.42 : (n == 3 ? 0.38 : 0.30)
-        let r = min(cellW, cellH) * rScale
+        let cell = min(cellW, cellH)
+        // Need 2r > cell so neighbours merge visually → solid-enough module for binarization.
+        let rScale: CGFloat = {
+            switch n {
+            case 2: return 0.62
+            case 3: return 0.55
+            case 4: return 0.52
+            default: return 0.50 // 5×5 — finer but still overlapping
+            }
+        }()
+        let r = cell * rScale
         for row in 0..<n {
             for col in 0..<n {
                 let cx = inner.minX + cellW * (CGFloat(col) + 0.5)
                 let cy = inner.minY + cellH * (CGFloat(row) + 0.5)
                 ctx.fillEllipse(in: CGRect(x: cx - r, y: cy - r, width: r * 2, height: r * 2))
             }
+        }
+    }
+
+    /// Six overlapping circles in a 3×2 layout (per module).
+    private static func fillDots3x2(in rect: CGRect, context ctx: CGContext) {
+        let pad = min(rect.width, rect.height) * 0.02
+        let inner = rect.insetBy(dx: pad, dy: pad)
+        let cols = 3, rows = 2
+        let cw = inner.width / CGFloat(cols)
+        let ch = inner.height / CGFloat(rows)
+        let cell = min(cw, ch)
+        let r = cell * 0.58
+        for row in 0..<rows {
+            for col in 0..<cols {
+                let cx = inner.minX + cw * (CGFloat(col) + 0.5)
+                let cy = inner.minY + ch * (CGFloat(row) + 0.5)
+                ctx.fillEllipse(in: CGRect(x: cx - r, y: cy - r, width: r * 2, height: r * 2))
+            }
+        }
+    }
+
+    /// Five circles in a plus — strong overlap at the centre for decoders.
+    private static func fillDotsPlus(in rect: CGRect, context ctx: CGContext) {
+        let pad = min(rect.width, rect.height) * 0.03
+        let inner = rect.insetBy(dx: pad, dy: pad)
+        let r = min(inner.width, inner.height) * 0.36
+        let positions: [(CGFloat, CGFloat)] = [
+            (0.5, 0.18), (0.5, 0.5), (0.5, 0.82),
+            (0.18, 0.5), (0.82, 0.5),
+        ]
+        for (px, py) in positions {
+            let cx = inner.minX + inner.width * px
+            let cy = inner.minY + inner.height * py
+            ctx.fillEllipse(in: CGRect(x: cx - r, y: cy - r, width: r * 2, height: r * 2))
+        }
+    }
+
+    /// Circular clip per module; image is aspect-filled across the **entire** QR `qrRect` so tiles align visually.
+    private static func drawPhotoDot(
+        in rect: CGRect,
+        context ctx: CGContext,
+        patternImage: UIImage?,
+        qrRect: CGRect,
+        fallbackColor: UIColor
+    ) {
+        guard let img = patternImage, let cg = img.cgImage else {
+            ctx.setFillColor(fallbackColor.cgColor)
+            let d = min(rect.width, rect.height) * 0.78
+            ctx.fillEllipse(in: CGRect(x: rect.midX - d / 2, y: rect.midY - d / 2, width: d, height: d))
+            return
+        }
+
+        ctx.saveGState()
+        let inset = min(rect.width, rect.height) * 0.05
+        let clip = rect.insetBy(dx: inset, dy: inset)
+        ctx.addEllipse(in: clip)
+        ctx.clip()
+
+        let imageSize = CGSize(width: CGFloat(cg.width), height: CGFloat(cg.height))
+        let dest = aspectFillRect(imageSize: imageSize, in: qrRect)
+        UIImage(cgImage: cg, scale: img.scale, orientation: img.imageOrientation)
+            .draw(in: dest, blendMode: .normal, alpha: 1)
+
+        ctx.restoreGState()
+    }
+
+    /// Aspect-fill `imageSize` into `bounds` (same behaviour as `UIView.ContentMode.scaleAspectFill`).
+    private static func aspectFillRect(imageSize: CGSize, in bounds: CGRect) -> CGRect {
+        guard imageSize.width > 1, imageSize.height > 1 else { return bounds }
+        let iw = imageSize.width
+        let ih = imageSize.height
+        let br = bounds.width / bounds.height
+        let ir = iw / ih
+        if ir > br {
+            let h = bounds.height
+            let w = h * ir
+            return CGRect(x: bounds.midX - w / 2, y: bounds.minY, width: w, height: h)
+        } else {
+            let w = bounds.width
+            let h = w / ir
+            return CGRect(x: bounds.minX, y: bounds.midY - h / 2, width: w, height: h)
         }
     }
 

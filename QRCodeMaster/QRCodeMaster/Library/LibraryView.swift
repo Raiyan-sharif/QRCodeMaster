@@ -71,11 +71,11 @@ struct LibraryView: View {
                         LibraryRow(item: item)
                     }
                 }
-                .onDelete(perform: delete)
+                .onDelete(perform: deleteItems)
             }
         }
         .searchable(text: $search, prompt: "Search payload or title")
-        .navigationTitle("Library")
+        .navigationTitle("Drafts")
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
@@ -102,10 +102,16 @@ struct LibraryView: View {
         try? modelContext.save()
     }
 
-    private func delete(at offsets: IndexSet) {
-        for i in offsets {
-            modelContext.delete(filtered[i])
+    private func deleteItems(at offsets: IndexSet) {
+        let snapshot = filtered
+        for index in offsets {
+            guard snapshot.indices.contains(index) else { continue }
+            deleteItem(snapshot[index])
         }
+    }
+
+    private func deleteItem(_ item: SavedCode) {
+        modelContext.delete(item)
         try? modelContext.save()
     }
 }

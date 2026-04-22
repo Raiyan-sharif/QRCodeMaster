@@ -24,6 +24,8 @@ struct QRStyleOptions: Codable, Equatable, Sendable {
     /// Optional text label drawn below the QR in the exported image.
     var captionText: String
     var captionColorHex: String
+    /// JPEG data for `ModuleShape.photoDots` — each dark module draws a clipped slice of this image (aspect-fill over the full QR).
+    var moduleDotPatternJPEG: Data?
 
     enum ModuleShape: String, Codable, CaseIterable, Sendable {
         case square
@@ -33,7 +35,12 @@ struct QRStyleOptions: Codable, Equatable, Sendable {
         case dots2x2
         case dots       // 3×3 — raw value `dots` keeps older saved JSON working
         case dots4x4
+        case dots5x5
+        case dots3x2    // 3×2 micro-grid per module
+        case dotsPlus   // five overlapping circles (plus)
         case diamond    // rotated square
+        /// Photo texture clipped to a circular dot per module (requires `moduleDotPatternJPEG`).
+        case photoDots
 
         var displayName: String {
             switch self {
@@ -43,7 +50,11 @@ struct QRStyleOptions: Codable, Equatable, Sendable {
             case .dots2x2:   "2×2 Dots"
             case .dots:      "3×3 Dots"
             case .dots4x4:   "4×4 Dots"
+            case .dots5x5:   "5×5 Dots"
+            case .dots3x2:   "3×2 Dots"
+            case .dotsPlus:   "Plus Dots"
             case .diamond:   "Diamond"
+            case .photoDots: "Photo dots"
             }
         }
     }
@@ -95,7 +106,8 @@ struct QRStyleOptions: Codable, Equatable, Sendable {
         brandBackgroundId: String? = nil,
         logoMaxRelativeSize: Double = 0.22,
         captionText: String = "",
-        captionColorHex: String = "#000000"
+        captionColorHex: String = "#000000",
+        moduleDotPatternJPEG: Data? = nil
     ) {
         self.foregroundHex = foregroundHex
         self.backgroundHex = backgroundHex
@@ -108,6 +120,7 @@ struct QRStyleOptions: Codable, Equatable, Sendable {
         self.logoMaxRelativeSize = logoMaxRelativeSize
         self.captionText = captionText
         self.captionColorHex = captionColorHex
+        self.moduleDotPatternJPEG = moduleDotPatternJPEG
     }
 
     static let `default` = QRStyleOptions()
@@ -120,7 +133,7 @@ struct QRStyleOptions: Codable, Equatable, Sendable {
     private enum CodingKeys: String, CodingKey {
         case foregroundHex, backgroundHex, errorCorrection, moduleShape, eyeStyle
         case frameId, backgroundTemplateId, brandBackgroundId, logoMaxRelativeSize
-        case captionText, captionColorHex
+        case captionText, captionColorHex, moduleDotPatternJPEG
     }
 
     init(from decoder: Decoder) throws {
@@ -136,6 +149,7 @@ struct QRStyleOptions: Codable, Equatable, Sendable {
         logoMaxRelativeSize  = (try? c.decode(Double.self,      forKey: .logoMaxRelativeSize)) ?? 0.22
         captionText          = (try? c.decode(String.self,      forKey: .captionText))         ?? ""
         captionColorHex      = (try? c.decode(String.self,      forKey: .captionColorHex))     ?? "#000000"
+        moduleDotPatternJPEG = try? c.decode(Data.self,         forKey: .moduleDotPatternJPEG)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -151,6 +165,7 @@ struct QRStyleOptions: Codable, Equatable, Sendable {
         try c.encode(logoMaxRelativeSize,  forKey: .logoMaxRelativeSize)
         try c.encode(captionText,          forKey: .captionText)
         try c.encode(captionColorHex,      forKey: .captionColorHex)
+        try c.encodeIfPresent(moduleDotPatternJPEG, forKey: .moduleDotPatternJPEG)
     }
 }
 

@@ -16,6 +16,7 @@ struct LibraryFilteredView: View {
 
     let filter: Filter
 
+    @Environment(\.modelContext) private var modelContext
     @Query(sort: \SavedCode.createdAt, order: .reverse) private var allItems: [SavedCode]
 
     private var items: [SavedCode] {
@@ -46,11 +47,21 @@ struct LibraryFilteredView: View {
                             LibraryFilteredRow(item: item)
                         }
                     }
+                    .onDelete(perform: deleteItems)
                 }
             }
         }
         .navigationTitle(navigationTitle)
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func deleteItems(at offsets: IndexSet) {
+        let snapshot = items
+        for index in offsets {
+            guard snapshot.indices.contains(index) else { continue }
+            modelContext.delete(snapshot[index])
+        }
+        try? modelContext.save()
     }
 
     private var navigationTitle: String {

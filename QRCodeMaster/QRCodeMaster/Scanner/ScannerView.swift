@@ -53,7 +53,7 @@ struct ScannerView: View {
                                 .background(.ultraThinMaterial, in: Circle())
                         }
                         Spacer()
-                        Button("Paste") {
+                        Button("Save to Folder") {
                             if let s = UIPasteboard.general.string, !s.isEmpty {
                                 pasteCandidate = s
                                 showPasteAlert = true

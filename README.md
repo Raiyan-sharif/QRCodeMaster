@@ -29,8 +29,8 @@ An iOS app for **creating**, **customising**, and **scanning** QR codes and barc
 |-----|-------------|
 | **Home** | Quick-create shortcuts (QR / Barcode), template gallery preview, trending-style cards, gear icon opens **Mine**. Staggered entrance on appear; primary cards and quick actions use press-scale feedback. |
 | **Template** | **27** procedural full-canvas backgrounds, each assigned to **exactly one** gallery filter: **Hot**, **Social**, **Love**, **Vcard**, **Business**, **Wifi** (no template is listed under more than one tab). Tapping a cell opens Create → Customize with that template pre-selected. |
-| **Scan** | Camera scanner for QR codes and all major barcode formats. Safe URL opening for `http`/`https`; all other payloads can be copied. |
-| **Drafts** | SwiftData-backed library with folders, favorites, full-text search, detail view, share, and save-to-photos. |
+| **Scan** | Camera scanner for QR codes and all major barcode formats. Safe URL opening for `http`/`https`; non-URL payloads stay in-app for copy. Clipboard helper is labeled **Save to Folder** and confirms before saving. |
+| **Drafts** | SwiftData-backed library with folders, favorites, full-text search, detail view, share, save-to-photos, and native swipe-to-delete rows. |
 
 Tab switching is implemented in `MainTabView` with a **custom tab bar** (not `TabView`): see [Motion & transitions](#motion--transitions).
 
@@ -60,6 +60,8 @@ Type selection and input-area transitions are described under [Motion & transiti
 | **Eyes** | 12 finder-eye styles (see table below). |
 
 Customize toolbar and preview animations: [Motion & transitions](#motion--transitions).
+
+Generated output preview (`QRSavedView`) also includes a **Verify QR** action backed by `QRImageVerifier` (Vision) so users can quickly confirm the final styled code remains machine-readable before sharing.
 
 #### 12 finder-eye styles
 

@@ -205,5 +205,3 @@ xcodebuild -scheme QRCodeMaster \
 - **AdMob / ads** — banner slot reserved in `HomeView`.
 
 ## License
-
-Specify your license here if the repo is public.

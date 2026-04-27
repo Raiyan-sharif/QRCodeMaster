@@ -4,9 +4,9 @@ An iOS app for **creating**, **customising**, and **scanning** QR codes and barc
 
 ## Contents
 
-- [Requirements](#requirements)
+- [Quick Start (User Guide)](#quick-start-user-guide)
 - [Features](#features)
-  - [Motion & transitions](#motion--transitions)
+- [Requirements](#requirements)
 - [Architecture](#architecture)
 - [Building](#building)
 - [Privacy entitlements](#privacy-entitlements)
@@ -20,6 +20,54 @@ An iOS app for **creating**, **customising**, and **scanning** QR codes and barc
 | **Xcode** | 16 + |
 | **iOS** | 18.6 + (`IPHONEOS_DEPLOYMENT_TARGET` in the Xcode project) |
 | **Language** | Swift 5 · SwiftUI · SwiftData |
+
+## Quick Start (User Guide)
+
+### 1) Create a QR or barcode
+
+1. Open the app and go to **Home**.
+2. Tap **Create QR** or **Create Barcode**.
+3. Pick a type (Text, URL, WiFi, Contact, Email, etc.).
+4. Fill in the form fields and continue.
+
+### 2) Customize the design
+
+Use the 6 customization tabs:
+
+- **Template**: choose a decorative background.
+- **Color**: set foreground and background colors or choose a brand image style.
+- **Logo**: place a center logo/photo.
+- **Text**: add caption text below the code.
+- **Dots**: change module shape style.
+- **Eyes**: choose finder-eye style.
+
+Tip: If readability is important, avoid low-contrast foreground/background combinations.
+
+### 3) Verify before sharing
+
+On the saved preview screen, tap **Verify QR** to test if the generated code is readable.  
+This is useful after applying heavy styling, logos, or decorative backgrounds.
+
+### 4) Save and share
+
+- Save the generated code to app library (**Drafts**).
+- Export to Photos.
+- Share using the iOS share sheet.
+
+### 5) Scan codes
+
+1. Open **Scan**.
+2. Point camera at a QR/barcode.
+3. `http/https` links open safely in browser.
+4. Non-link payloads stay in-app so you can copy them.
+5. Use **Save to Folder** (clipboard helper) to save pasted text directly.
+
+### 6) Manage Drafts
+
+- Search by title/payload.
+- Organize into folders.
+- Mark favorites.
+- Swipe left on an item to delete.
 
 ## Features
 

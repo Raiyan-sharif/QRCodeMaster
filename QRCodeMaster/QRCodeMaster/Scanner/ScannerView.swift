@@ -18,7 +18,7 @@ struct ScannerView: View {
     @State private var authorization: AVAuthorizationStatus = AVCaptureDevice.authorizationStatus(for: .video)
     @State private var lastCode: String?
     @State private var torchOn = false
-    @State private var showPasteAlert = false
+    @State private var showSaveToFolderAlert = false
     @State private var pasteCandidate: String?
     /// Full decoded payload for copy / preview (plain-text QRs have no browser handoff).
     @State private var lastScanPayload: String?
@@ -56,7 +56,7 @@ struct ScannerView: View {
                         Button("Save to Folder") {
                             if let s = UIPasteboard.general.string, !s.isEmpty {
                                 pasteCandidate = s
-                                showPasteAlert = true
+                                showSaveToFolderAlert = true
                             }
                         }
                         .padding(.horizontal, 14)
@@ -151,8 +151,8 @@ struct ScannerView: View {
                 resetTransientScanState()
             }
         }
-        .alert("Save clipboard text?", isPresented: $showPasteAlert) {
-            Button("Save to Library") {
+        .alert("Save to Folder?", isPresented: $showSaveToFolderAlert) {
+            Button("Save to Folder") {
                 if let pasteCandidate {
                     persistScan(pasteCandidate, type: .qr)
                     lastCode = pasteCandidate
@@ -160,7 +160,7 @@ struct ScannerView: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text(pasteCandidate ?? "")
+            Text("The clipboard text will be saved to your Drafts folder.\n\n\(pasteCandidate ?? "")")
         }
     }
 

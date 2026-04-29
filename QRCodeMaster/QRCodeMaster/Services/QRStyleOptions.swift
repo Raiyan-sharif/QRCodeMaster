@@ -26,6 +26,10 @@ struct QRStyleOptions: Codable, Equatable, Sendable {
     var captionColorHex: String
     /// JPEG data for `ModuleShape.photoDots` — each dark module draws a clipped slice of this image (aspect-fill over the full QR).
     var moduleDotPatternJPEG: Data?
+    /// Optional stroke color around the outer QR card/bounds.
+    var outerBorderHex: String?
+    /// Adds a subtle white inner underlay below modules to improve readability on noisy backgrounds.
+    var preferReadabilityUnderlay: Bool
 
     enum ModuleShape: String, Codable, CaseIterable, Sendable {
         case square
@@ -107,7 +111,9 @@ struct QRStyleOptions: Codable, Equatable, Sendable {
         logoMaxRelativeSize: Double = 0.22,
         captionText: String = "",
         captionColorHex: String = "#000000",
-        moduleDotPatternJPEG: Data? = nil
+        moduleDotPatternJPEG: Data? = nil,
+        outerBorderHex: String? = nil,
+        preferReadabilityUnderlay: Bool = false
     ) {
         self.foregroundHex = foregroundHex
         self.backgroundHex = backgroundHex
@@ -121,6 +127,8 @@ struct QRStyleOptions: Codable, Equatable, Sendable {
         self.captionText = captionText
         self.captionColorHex = captionColorHex
         self.moduleDotPatternJPEG = moduleDotPatternJPEG
+        self.outerBorderHex = outerBorderHex
+        self.preferReadabilityUnderlay = preferReadabilityUnderlay
     }
 
     static let `default` = QRStyleOptions()
@@ -133,7 +141,7 @@ struct QRStyleOptions: Codable, Equatable, Sendable {
     private enum CodingKeys: String, CodingKey {
         case foregroundHex, backgroundHex, errorCorrection, moduleShape, eyeStyle
         case frameId, backgroundTemplateId, brandBackgroundId, logoMaxRelativeSize
-        case captionText, captionColorHex, moduleDotPatternJPEG
+        case captionText, captionColorHex, moduleDotPatternJPEG, outerBorderHex, preferReadabilityUnderlay
     }
 
     init(from decoder: Decoder) throws {
@@ -150,6 +158,8 @@ struct QRStyleOptions: Codable, Equatable, Sendable {
         captionText          = (try? c.decode(String.self,      forKey: .captionText))         ?? ""
         captionColorHex      = (try? c.decode(String.self,      forKey: .captionColorHex))     ?? "#000000"
         moduleDotPatternJPEG = try? c.decode(Data.self,         forKey: .moduleDotPatternJPEG)
+        outerBorderHex       = try? c.decode(String.self,       forKey: .outerBorderHex)
+        preferReadabilityUnderlay = (try? c.decode(Bool.self,   forKey: .preferReadabilityUnderlay)) ?? false
     }
 
     func encode(to encoder: Encoder) throws {
@@ -166,6 +176,8 @@ struct QRStyleOptions: Codable, Equatable, Sendable {
         try c.encode(captionText,          forKey: .captionText)
         try c.encode(captionColorHex,      forKey: .captionColorHex)
         try c.encodeIfPresent(moduleDotPatternJPEG, forKey: .moduleDotPatternJPEG)
+        try c.encodeIfPresent(outerBorderHex, forKey: .outerBorderHex)
+        try c.encode(preferReadabilityUnderlay, forKey: .preferReadabilityUnderlay)
     }
 }
 

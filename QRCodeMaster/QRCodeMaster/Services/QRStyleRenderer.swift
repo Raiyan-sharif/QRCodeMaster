@@ -11,7 +11,7 @@ enum QRStyleRenderer {
     private static let context = CIContext(options: [.useSoftwareRenderer: false])
 
     /// Share of the export square used by the QR matrix when a template is active.
-    private static let templateQRRelativeSide: CGFloat = 0.72
+    private static let templateQRRelativeSide: CGFloat = 0.68
 
     // MARK: - Public
 
@@ -67,7 +67,7 @@ enum QRStyleRenderer {
             moduleScale  = side / CGFloat(n)
             matrixOrigin = qrRect.origin
         } else {
-            let quietZone   = 2                                    // modules of white border each side
+            let quietZone   = 3                                    // modules of white border each side
             moduleScale     = outputPoints / CGFloat(n + quietZone * 2)
             let qrOffset    = CGFloat(quietZone) * moduleScale
             qrRect          = CGRect(x: qrOffset, y: qrOffset,
@@ -138,6 +138,29 @@ enum QRStyleRenderer {
             ctx.clip()
             ctx.setFillColor(bg.cgColor)
             ctx.fill(qrRect)
+            ctx.restoreGState()
+        }
+
+        // Optional readability underlay for noisy backgrounds.
+        if options.preferReadabilityUnderlay {
+            ctx.saveGState()
+            let underlay = UIBezierPath(roundedRect: qrRect, cornerRadius: qrRect.width * 0.05)
+            ctx.addPath(underlay.cgPath)
+            ctx.clip()
+            ctx.setFillColor(UIColor.white.withAlphaComponent(0.86).cgColor)
+            ctx.fill(qrRect)
+            ctx.restoreGState()
+        }
+
+        if let borderHex = options.outerBorderHex,
+           let borderColor = UIColor(hex: borderHex) {
+            ctx.saveGState()
+            let strokeRect = qrRect.insetBy(dx: -moduleScale * 0.9, dy: -moduleScale * 0.9)
+            let borderPath = UIBezierPath(roundedRect: strokeRect, cornerRadius: qrRect.width * 0.065).cgPath
+            ctx.setStrokeColor(borderColor.cgColor)
+            ctx.setLineWidth(max(2, moduleScale * 1.3))
+            ctx.addPath(borderPath)
+            ctx.strokePath()
             ctx.restoreGState()
         }
 

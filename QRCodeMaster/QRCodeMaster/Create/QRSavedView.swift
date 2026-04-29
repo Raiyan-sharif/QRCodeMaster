@@ -13,8 +13,10 @@ struct QRSavedView: View {
     let payload: String
     let payloadType: QRPayloadType
     let styleOptions: QRStyleOptions
+    var onApplyFixes: ((QRStyleOptions) -> Void)? = nil
 
     @Environment(\.subscriptionStatus) private var subscription
+    @Environment(\.dismiss) private var dismiss
 
     @State private var showShare = false
     @State private var showSavedToPhotos = false
@@ -153,38 +155,44 @@ struct QRSavedView: View {
             .background(Color.green.opacity(0.12), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
 
         case .readablePayloadMismatch(let found):
-            HStack(alignment: .top, spacing: 10) {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .font(.title2)
-                    .foregroundStyle(.orange)
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Readable, but different text")
-                        .font(.subheadline.weight(.semibold))
-                    Text("Vision decoded a QR, but the string does not match what you saved.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Text(found)
-                        .font(.caption2.monospaced())
-                        .foregroundStyle(.primary)
-                        .lineLimit(6)
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .top, spacing: 10) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.title2)
+                        .foregroundStyle(.orange)
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Readable, but different text")
+                            .font(.subheadline.weight(.semibold))
+                        Text("Vision decoded a QR, but the string does not match what you saved.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Text(found)
+                            .font(.caption2.monospaced())
+                            .foregroundStyle(.primary)
+                            .lineLimit(6)
+                    }
                 }
+                fixRetryActions
             }
             .padding(14)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
 
         case .couldNotReadFromImage:
-            HStack(alignment: .top, spacing: 10) {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.title2)
-                    .foregroundStyle(.red.opacity(0.85))
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Could not read this image")
-                        .font(.subheadline.weight(.semibold))
-                    Text("No QR code was detected. Heavy styling or low contrast can block scanners; try a simpler template or higher error correction.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .top, spacing: 10) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.title2)
+                        .foregroundStyle(.red.opacity(0.85))
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Could not read this image")
+                            .font(.subheadline.weight(.semibold))
+                        Text("No QR code was detected. Heavy styling or low contrast can block scanners; try a simpler template or higher error correction.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
+                fixRetryActions
             }
             .padding(14)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -207,6 +215,36 @@ struct QRSavedView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Color(.secondarySystemFill), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         }
+    }
+
+    private var fixRetryActions: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Fix & Retry")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+            HStack(spacing: 8) {
+                ForEach([QRReadabilityAdvisor.FixAction.increaseContrast, .reduceLogo, .simplifyModules], id: \.rawValue) { action in
+                    Button(action.title) {
+                        applyFix(action)
+                    }
+                    .buttonStyle(.bordered)
+                    .font(.caption2)
+                }
+            }
+            Button(QRReadabilityAdvisor.FixAction.applyAll.title) {
+                applyFix(.applyAll)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(teal)
+            .font(.caption.weight(.semibold))
+        }
+    }
+
+    private func applyFix(_ action: QRReadabilityAdvisor.FixAction) {
+        guard let onApplyFixes else { return }
+        let fixed = QRReadabilityAdvisor.applyingFix(action, to: styleOptions)
+        onApplyFixes(fixed)
+        dismiss()
     }
 
     // MARK: - QR preview card

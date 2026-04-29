@@ -22,6 +22,7 @@ struct QRCustomizeView: View {
     @State private var rendered:    UIImage?
     @State private var isRendering: Bool = false
     @State private var renderTask:  Task<Void, Never>?
+    @State private var previewVerifyTask: Task<Void, Never>?
     @State private var activePanel: Panel?
     @State private var navigateToSaved = false
     @State private var savedImage: UIImage?
@@ -39,6 +40,9 @@ struct QRCustomizeView: View {
     // Text panel state
     @State private var editCaption: String = ""
     @State private var editCaptionColor: Color = .black
+    @State private var readabilityReport: QRReadabilityAdvisor.Report?
+    @State private var autoAdjustMessage: String?
+    @State private var previewVerificationOutcome: QRImageVerifier.Outcome = .idle
 
     // Gradient / color swatches
     private let solidPresets: [Color] = [
@@ -101,6 +105,18 @@ struct QRCustomizeView: View {
         VStack(spacing: 0) {
             // QR Preview
             qrPreviewSection
+            if let report = readabilityReport, shouldShowReadabilityBanner(report: report) {
+                readabilityBanner(report: report)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 10)
+            }
+            if let autoAdjustMessage {
+                Text(autoAdjustMessage)
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 8)
+            }
 
             Divider()
 
@@ -137,12 +153,25 @@ struct QRCustomizeView: View {
         }
         .navigationDestination(isPresented: $navigateToSaved) {
             if let img = savedImage {
-                QRSavedView(image: img, payload: payload, payloadType: payloadType, styleOptions: style)
+                QRSavedView(image: img, payload: payload, payloadType: payloadType, styleOptions: style) { updatedStyle in
+                    style = updatedStyle
+                    autoAdjustMessage = "Applied Fix & Retry changes. Verify again after saving."
+                    navigateToSaved = false
+                }
             }
         }
-        .onAppear { regenerate() }
-        .onChange(of: style)     { _, _ in regenerate() }
-        .onChange(of: logoImage) { _, _ in regenerate() }
+        .onAppear {
+            applySafetyRulesIfNeeded(triggeredByUser: false)
+            regenerate()
+        }
+        .onChange(of: style)     { _, _ in
+            applySafetyRulesIfNeeded(triggeredByUser: true)
+            regenerate()
+        }
+        .onChange(of: logoImage) { _, _ in
+            applySafetyRulesIfNeeded(triggeredByUser: true)
+            regenerate()
+        }
         .onChange(of: logoItem)  { _, new in loadLogo(new) }
         .onChange(of: moduleDotPickerItem) { _, new in loadModuleDotPhoto(new) }
     }
@@ -187,6 +216,89 @@ struct QRCustomizeView: View {
         .frame(maxWidth: .infinity)
         .frame(height: 260)
         .animation(.easeInOut(duration: 0.2), value: isRendering)
+    }
+
+    private func readabilityBanner(report: QRReadabilityAdvisor.Report) -> some View {
+        let verificationFailed: Bool = {
+            switch previewVerificationOutcome {
+            case .couldNotReadFromImage, .readablePayloadMismatch, .failed:
+                return true
+            default:
+                return false
+            }
+        }()
+        let bannerRisk = report.riskHigh || verificationFailed
+        let iconName = bannerRisk ? "exclamationmark.triangle.fill" : "checkmark.shield.fill"
+        let iconColor: Color = verificationFailed ? .red : (report.riskHigh ? .orange : .green)
+        let title: String = {
+            if verificationFailed { return "Rendered preview failed decode" }
+            return report.riskHigh ? "Readability risk detected" : "Readability checks"
+        }()
+
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Image(systemName: iconName)
+                    .foregroundStyle(iconColor)
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                Spacer()
+                Text("Contrast \(String(format: "%.1f", report.contrastRatio)):1")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            verificationLine
+            Text("Module \(String(format: "%.1f", report.modulePixels))px • Quiet \(String(format: "%.1f", report.quietZoneModules)) modules • Logo \(Int(report.logoCoveragePercent))%")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            Text(report.issues.joined(separator: " "))
+                .font(.caption)
+                .foregroundStyle(bannerRisk ? .orange : .secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(12)
+        .background((verificationFailed ? Color.red : (report.riskHigh ? Color.orange : Color.green)).opacity(0.11), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+
+    @ViewBuilder
+    private var verificationLine: some View {
+        switch previewVerificationOutcome {
+        case .idle:
+            EmptyView()
+        case .verifying:
+            HStack(spacing: 6) {
+                ProgressView()
+                    .scaleEffect(0.8)
+                Text("Decoding rendered preview…")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+        case .validMatchesContent:
+            Text("Vision decode check: passed")
+                .font(.caption2)
+                .foregroundStyle(.green)
+        case .readablePayloadMismatch:
+            Text("Vision decode check: payload mismatch in rendered preview.")
+                .font(.caption2)
+                .foregroundStyle(.red)
+        case .couldNotReadFromImage:
+            Text("Vision decode check: could not read rendered preview.")
+                .font(.caption2)
+                .foregroundStyle(.red)
+        case .failed(let message):
+            Text("Vision decode check failed: \(message)")
+                .font(.caption2)
+                .foregroundStyle(.red)
+        }
+    }
+
+    private func shouldShowReadabilityBanner(report: QRReadabilityAdvisor.Report) -> Bool {
+        if !report.issues.isEmpty { return true }
+        switch previewVerificationOutcome {
+        case .idle:
+            return false
+        default:
+            return true
+        }
     }
 
     // MARK: - Tool button row
@@ -538,9 +650,18 @@ struct QRCustomizeView: View {
                     .overlay(RoundedRectangle(cornerRadius: 10).stroke(logoImage != nil ? Color(red: 0.18, green: 0.72, blue: 0.65) : Color.clear, lineWidth: 2.5))
                 }
                 .buttonStyle(.plain)
+                .disabled(isDensePayload)
+                .opacity(isDensePayload ? 0.45 : 1.0)
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 14)
+
+            if isDensePayload {
+                Text("Dense payload mode: logo upload is limited for reliable scanning.")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                    .padding(.horizontal, 16)
+            }
 
             Text("Logo correction level")
                 .font(.caption)
@@ -641,6 +762,13 @@ struct QRCustomizeView: View {
                     .padding(.horizontal, 16)
             }
 
+            if isDensePayload {
+                Text("Dense payload mode: module shape is locked to Square for best readability.")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                    .padding(.horizontal, 16)
+            }
+
             Text("Module Shape")
                 .font(.subheadline.weight(.semibold))
                 .padding(.horizontal, 16)
@@ -651,6 +779,7 @@ struct QRCustomizeView: View {
                     spacing: 10
                 ) {
                     ForEach(QRStyleOptions.ModuleShape.allCases, id: \.rawValue) { shape in
+                        let disabledByDenseMode = isDensePayload && shape != .square
                         Button {
                             style.moduleShape = shape
                         } label: {
@@ -671,6 +800,8 @@ struct QRCustomizeView: View {
                             }
                         }
                         .buttonStyle(.plain)
+                        .disabled(disabledByDenseMode)
+                        .opacity(disabledByDenseMode ? 0.45 : 1.0)
                     }
                 }
                 .padding(.horizontal, 16)
@@ -718,8 +849,33 @@ struct QRCustomizeView: View {
 
     // MARK: - Actions
 
+    private var isDensePayload: Bool {
+        readabilityReport?.densePayload ?? (payload.count >= QRReadabilityAdvisor.densePayloadThreshold)
+    }
+
+    private func applySafetyRulesIfNeeded(triggeredByUser: Bool) {
+        let current = QRReadabilityAdvisor.analyze(payload: payload, style: style, hasLogo: logoImage != nil)
+        let safer = QRReadabilityAdvisor.applyingSafeDefaults(to: style, payload: payload, hasLogo: logoImage != nil)
+
+        if safer != style {
+            style = safer
+            readabilityReport = QRReadabilityAdvisor.analyze(payload: payload, style: safer, hasLogo: logoImage != nil)
+            if triggeredByUser {
+                autoAdjustMessage = "Adjusted style for scan reliability (contrast, logo size, module shape, and underlay)."
+            }
+        } else {
+            readabilityReport = current
+        }
+
+        if !(readabilityReport?.riskHigh ?? false) {
+            autoAdjustMessage = nil
+        }
+    }
+
     private func regenerate() {
         renderTask?.cancel()
+        previewVerifyTask?.cancel()
+        previewVerificationOutcome = .verifying
         guard !payload.isEmpty else { rendered = nil; return }
 
         // Capture all needed state before leaving the main actor.
@@ -749,6 +905,17 @@ struct QRCustomizeView: View {
             }
             renderVersion += 1
             isRendering = false
+
+            guard let image else {
+                previewVerificationOutcome = .failed("Renderer returned no image.")
+                return
+            }
+
+            previewVerifyTask = Task {
+                let verifyResult = await QRImageVerifier.verify(image: image, expectedPayload: msg)
+                guard !Task.isCancelled else { return }
+                previewVerificationOutcome = verifyResult
+            }
         }
     }
 

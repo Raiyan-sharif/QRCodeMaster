@@ -48,6 +48,8 @@ Tip: If readability is important, avoid low-contrast foreground/background combi
 On the saved preview screen, tap **Verify QR** to test if the generated code is readable.  
 This is useful after applying heavy styling, logos, or decorative backgrounds.
 
+The customizer also runs a **Readability Advisor** during style changes: contrast, logo coverage, module size, quiet zone, and decorative-shape risk are analyzed so the app can suggest safer settings before export.
+
 ### 4) Save and share
 
 - Save the generated code to app library (**Drafts**).
@@ -110,6 +112,12 @@ Type selection and input-area transitions are described under [Motion & transiti
 Customize toolbar and preview animations: [Motion & transitions](#motion--transitions).
 
 Generated output preview (`QRSavedView`) also includes a **Verify QR** action backed by `QRImageVerifier` (Vision) so users can quickly confirm the final styled code remains machine-readable before sharing.
+
+### Readability guardrails
+
+- `QRReadabilityAdvisor` scores style risk using contrast ratio, quiet-zone estimate, module pixel size, payload density, logo coverage, and decorative-style penalties.
+- Dense/high-risk combinations can trigger safe defaults: black-on-white colors, square modules, smaller logo cap, higher error correction (`H`), and readability underlay preference.
+- One-tap fix actions are exposed for common issues (`Increase Contrast`, `Reduce Logo`, `Simplify Dots`, `Apply All & Retry`).
 
 #### 12 finder-eye styles
 
@@ -180,6 +188,7 @@ QRCodeMaster/QRCodeMaster/
 │   ├── QRStyleOptions.swift             # Style model — Codable, Equatable, backward-compat
 │   ├── QRPayloadEncoder.swift           # 31 payload types + structured payload structs
 │   ├── QRBackgroundTemplateCatalog.swift # 27 categorized decorative templates + 22 brand items
+│   ├── QRReadabilityAdvisor.swift       # Risk scoring + safe-style fallback actions
 │   ├── BarcodeGeneratorService.swift
 │   └── EAN13Encoder.swift
 ├── Shared/
@@ -218,6 +227,7 @@ QRCodeMaster/QRCodeMaster/
 | `PressScaleButtonStyle` with configurable `scale` | Centralises press-feedback so every tappable surface (primary cards, grid buttons, type icons) shares one consistent spring curve. |
 | Direction-aware panel slide in `QRCustomizeView` | `prevPanel` index comparison determines `.leading` vs `.trailing` edge so the panel always slides in the intuitive direction. |
 | Template gallery partition | `CatalogEntry.category` assigns each decorative ID to a single `GalleryCategory`; `templates(in:)` filters so Hot / Social / Love / Vcard / Business / Wifi lists never overlap. |
+| `QRReadabilityAdvisor` preflight checks | Centralizes readability heuristics and safe defaults so high-risk style combos can be corrected before share/export. |
 
 ---
 

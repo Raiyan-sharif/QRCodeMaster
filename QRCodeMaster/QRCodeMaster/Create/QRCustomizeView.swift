@@ -44,16 +44,11 @@ struct QRCustomizeView: View {
     @State private var autoAdjustMessage: String?
     @State private var previewVerificationOutcome: QRImageVerifier.Outcome = .idle
 
-    // Gradient / color swatches
-    private let solidPresets: [Color] = [
-        .black, .white,
-        Color(red: 0.95, green: 0.25, blue: 0.45),
-        Color(red: 0.95, green: 0.2, blue: 0.2),
-        Color(red: 0.15, green: 0.35, blue: 0.75),
-        Color(red: 0.98, green: 0.58, blue: 0.1),
-        Color(red: 0.55, green: 0.25, blue: 0.88),
-        Color(red: 0.18, green: 0.72, blue: 0.65),
-        Color(red: 0.15, green: 0.55, blue: 0.28),
+    // Canonical HEX swatches to avoid Color->UIColor conversion drift on selection.
+    private let solidPresets: [String] = [
+        "#000000", "#FFFFFF",
+        "#F24073", "#F23333", "#2659BF",
+        "#FA941A", "#8C40E0", "#2EB8A6", "#268C47",
     ]
 
     enum Panel: CaseIterable {
@@ -340,17 +335,34 @@ struct QRCustomizeView: View {
     @ViewBuilder
     private func panelContent(_ panel: Panel) -> some View {
         ScrollView {
-            switch panel {
-            case .template: templatePanel
-            case .color:    colorPanel
-            case .logo:     logoPanel
-            case .text:     textPanel
-            case .dots:     dotsPanel
-            case .eyes:     eyesPanel
+            VStack(spacing: 0) {
+                switch panel {
+                case .template: templatePanel
+                case .color:    colorPanel
+                case .logo:     logoPanel
+                case .text:     textPanel
+                case .dots:     dotsPanel
+                case .eyes:     eyesPanel
+                }
             }
+            // Keep the bottom-most controls reachable above the custom tab bar.
+            .padding(.bottom, 28)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
         }
-        .frame(height: 260)
+        .scrollIndicators(.visible)
+        .frame(height: panelScrollHeight(for: panel))
         .background(Color(.systemBackground))
+    }
+
+    private func panelScrollHeight(for panel: Panel) -> CGFloat {
+        switch panel {
+        case .template, .dots, .eyes:
+            return 370
+        case .color:
+            return 430
+        case .logo, .text:
+            return 300
+        }
     }
 
     // MARK: - Template panel
@@ -462,8 +474,13 @@ struct QRCustomizeView: View {
                         style.brandBackgroundId = nil  // clear brand image when a solid colour is chosen
                     }
                 )
+
+                Divider().padding(.leading, 16)
+
+                outerBorderSwatchSection
             }
         }
+        .padding(.bottom, 150)
     }
 
     private func colorTabButton(_ label: String, tab: ColorTab) -> some View {
@@ -570,12 +587,9 @@ struct QRCustomizeView: View {
                     .frame(width: 36, height: 36)
 
                     // Presets
-                    ForEach(solidPresets.indices, id: \.self) { idx in
-                        let color = solidPresets[idx]
+                    ForEach(solidPresets, id: \.self) { hex in
+                        let color = Color(uiColor: UIColor(hex: hex) ?? .black)
                         Button {
-                            var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
-                            UIColor(color).getRed(&r, green: &g, blue: &b, alpha: &a)
-                            let hex = String(format: "#%02X%02X%02X", Int(r * 255), Int(g * 255), Int(b * 255))
                             onSelect(hex)
                         } label: {
                             Circle()
@@ -584,7 +598,71 @@ struct QRCustomizeView: View {
                                 .overlay(
                                     Circle().stroke(Color(.systemBackground), lineWidth: 2)
                                         .padding(2)
-                                        .opacity(uiColorHex(for: color) == selectedHex ? 1 : 0)
+                                        .opacity(hex.caseInsensitiveCompare(selectedHex) == .orderedSame ? 1 : 0)
+                                )
+                                .shadow(color: .black.opacity(0.15), radius: 3, x: 0, y: 1)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 14)
+            }
+        }
+    }
+
+    private var outerBorderSwatchSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Outer Border Color")
+                .font(.subheadline.weight(.semibold))
+                .padding(.horizontal, 16)
+                .padding(.top, 10)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    Button {
+                        style.outerBorderHex = nil
+                    } label: {
+                        ZStack {
+                            Circle()
+                                .fill(Color(.secondarySystemFill))
+                                .frame(width: 36, height: 36)
+                            Image(systemName: "circle.slash")
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(.secondary)
+                        }
+                        .overlay(
+                            Circle()
+                                .stroke(Color(red: 0.18, green: 0.72, blue: 0.65), lineWidth: 2)
+                                .padding(2)
+                                .opacity(style.outerBorderHex == nil ? 1 : 0)
+                        )
+                    }
+                    .buttonStyle(.plain)
+
+                    ColorPicker("", selection: Binding(
+                        get: { Color(uiColor: UIColor(hex: style.outerBorderHex ?? "#000000") ?? .black) },
+                        set: { c in
+                            var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+                            UIColor(c).getRed(&r, green: &g, blue: &b, alpha: &a)
+                            style.outerBorderHex = String(format: "#%02X%02X%02X", Int(r * 255), Int(g * 255), Int(b * 255))
+                        }
+                    ))
+                    .labelsHidden()
+                    .frame(width: 36, height: 36)
+
+                    ForEach(solidPresets, id: \.self) { hex in
+                        let color = Color(uiColor: UIColor(hex: hex) ?? .black)
+                        Button {
+                            style.outerBorderHex = hex
+                        } label: {
+                            Circle()
+                                .fill(color)
+                                .frame(width: 36, height: 36)
+                                .overlay(
+                                    Circle().stroke(Color(.systemBackground), lineWidth: 2)
+                                        .padding(2)
+                                        .opacity(hex.caseInsensitiveCompare(style.outerBorderHex ?? "") == .orderedSame ? 1 : 0)
                                 )
                                 .shadow(color: .black.opacity(0.15), radius: 3, x: 0, y: 1)
                         }
@@ -773,41 +851,38 @@ struct QRCustomizeView: View {
                 .font(.subheadline.weight(.semibold))
                 .padding(.horizontal, 16)
 
-            ScrollView {
-                LazyVGrid(
-                    columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 4),
-                    spacing: 10
-                ) {
-                    ForEach(QRStyleOptions.ModuleShape.allCases, id: \.rawValue) { shape in
-                        let disabledByDenseMode = isDensePayload && shape != .square
-                        Button {
-                            style.moduleShape = shape
-                        } label: {
-                            VStack(spacing: 6) {
-                                ModuleShapePreview(shape: shape, photoThumbnail: style.moduleDotPatternJPEG.flatMap { UIImage(data: $0) })
-                                    .frame(width: 46, height: 46)
-                                    .background(Color(.secondarySystemFill), in: RoundedRectangle(cornerRadius: 10))
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 10)
-                                            .stroke(style.moduleShape == shape ? Color(red: 0.18, green: 0.72, blue: 0.65) : Color.clear, lineWidth: 2.5)
-                                    )
-                                Text(shape.displayName)
-                                    .font(.system(size: 10, weight: .medium))
-                                    .foregroundStyle(.primary)
-                                    .lineLimit(2)
-                                    .minimumScaleFactor(0.75)
-                                    .multilineTextAlignment(.center)
-                            }
+            LazyVGrid(
+                columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 4),
+                spacing: 10
+            ) {
+                ForEach(QRStyleOptions.ModuleShape.allCases, id: \.rawValue) { shape in
+                    let disabledByDenseMode = isDensePayload && shape != .square
+                    Button {
+                        style.moduleShape = shape
+                    } label: {
+                        VStack(spacing: 6) {
+                            ModuleShapePreview(shape: shape, photoThumbnail: style.moduleDotPatternJPEG.flatMap { UIImage(data: $0) })
+                                .frame(width: 46, height: 46)
+                                .background(Color(.secondarySystemFill), in: RoundedRectangle(cornerRadius: 10))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 10)
+                                        .stroke(style.moduleShape == shape ? Color(red: 0.18, green: 0.72, blue: 0.65) : Color.clear, lineWidth: 2.5)
+                                )
+                            Text(shape.displayName)
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundStyle(.primary)
+                                .lineLimit(2)
+                                .minimumScaleFactor(0.75)
+                                .multilineTextAlignment(.center)
                         }
-                        .buttonStyle(.plain)
-                        .disabled(disabledByDenseMode)
-                        .opacity(disabledByDenseMode ? 0.45 : 1.0)
                     }
+                    .buttonStyle(.plain)
+                    .disabled(disabledByDenseMode)
+                    .opacity(disabledByDenseMode ? 0.45 : 1.0)
                 }
-                .padding(.horizontal, 16)
-                .padding(.bottom, 14)
             }
-            .frame(maxHeight: 320)
+            .padding(.horizontal, 16)
+            .padding(.bottom, 120)
         }
     }
 
@@ -855,19 +930,23 @@ struct QRCustomizeView: View {
 
     private func applySafetyRulesIfNeeded(triggeredByUser: Bool) {
         let current = QRReadabilityAdvisor.analyze(payload: payload, style: style, hasLogo: logoImage != nil)
-        let safer = QRReadabilityAdvisor.applyingSafeDefaults(to: style, payload: payload, hasLogo: logoImage != nil)
+        readabilityReport = current
 
+        // Respect direct user edits (especially color swatch taps) so selections
+        // are not immediately reverted by automatic safe defaults.
+        guard !triggeredByUser else {
+            autoAdjustMessage = current.riskHigh
+                ? "Readability risk detected. Use Verify QR or Apply Fix & Retry after saving."
+                : nil
+            return
+        }
+
+        let safer = QRReadabilityAdvisor.applyingSafeDefaults(to: style, payload: payload, hasLogo: logoImage != nil)
         if safer != style {
             style = safer
             readabilityReport = QRReadabilityAdvisor.analyze(payload: payload, style: safer, hasLogo: logoImage != nil)
-            if triggeredByUser {
-                autoAdjustMessage = "Adjusted style for scan reliability (contrast, logo size, module shape, and underlay)."
-            }
-        } else {
-            readabilityReport = current
-        }
-
-        if !(readabilityReport?.riskHigh ?? false) {
+            autoAdjustMessage = "Adjusted style for scan reliability (contrast, logo size, module shape, and underlay)."
+        } else if !(readabilityReport?.riskHigh ?? false) {
             autoAdjustMessage = nil
         }
     }

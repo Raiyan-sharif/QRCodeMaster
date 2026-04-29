@@ -12,6 +12,8 @@ enum QRStyleRenderer {
 
     /// Share of the export square used by the QR matrix when a template is active.
     private static let templateQRRelativeSide: CGFloat = 0.68
+    /// Keep the QR modules slightly inset from the colored card background.
+    private static let qrInsetFromCardPerSide: CGFloat = 5
 
     // MARK: - Public
 
@@ -51,9 +53,10 @@ enum QRStyleRenderer {
         defer { UIGraphicsEndImageContext() }
         guard let ctx = UIGraphicsGetCurrentContext() else { return nil }
 
-        // QR placement rect and module scale — computed before background drawing so we can
-        // constrain the template gradient to the QR rect rather than the whole canvas.
+        // Card + QR placement rects and module scale — computed before background drawing so we can
+        // constrain the template gradient to the card rect rather than the whole canvas.
         let moduleScale: CGFloat
+        let cardRect: CGRect        // colored/brand card area
         let qrRect: CGRect          // actual QR module area (logo centering, etc.)
         let matrixOrigin: CGPoint   // top-left pixel of module [0,0]
 
@@ -62,9 +65,11 @@ enum QRStyleRenderer {
         let usesCardLayout = hasTemplate || hasBrand
         if usesCardLayout {
             let side = min(bounds.width, bounds.height) * Self.templateQRRelativeSide
-            qrRect       = CGRect(x: bounds.midX - side / 2, y: bounds.midY - side / 2,
+            cardRect     = CGRect(x: bounds.midX - side / 2, y: bounds.midY - side / 2,
                                   width: side, height: side)
-            moduleScale  = side / CGFloat(n)
+            // Make generated QR 10 px smaller than its background card (5 px per side).
+            qrRect       = cardRect.insetBy(dx: Self.qrInsetFromCardPerSide, dy: Self.qrInsetFromCardPerSide)
+            moduleScale  = qrRect.width / CGFloat(n)
             matrixOrigin = qrRect.origin
         } else {
             let quietZone   = 3                                    // modules of white border each side
@@ -73,6 +78,7 @@ enum QRStyleRenderer {
             qrRect          = CGRect(x: qrOffset, y: qrOffset,
                                      width: CGFloat(n) * moduleScale,
                                      height: CGFloat(n) * moduleScale)
+            cardRect        = qrRect
             matrixOrigin    = qrRect.origin
         }
 
@@ -106,25 +112,25 @@ enum QRStyleRenderer {
                locations: [0.0, 1.0]
            ) {
             ctx.saveGState()
-            let cardClip = UIBezierPath(roundedRect: qrRect, cornerRadius: qrRect.width * 0.05)
+            let cardClip = UIBezierPath(roundedRect: cardRect, cornerRadius: cardRect.width * 0.05)
             ctx.addPath(cardClip.cgPath)
             ctx.clip()
 
             ctx.drawLinearGradient(
                 gradient,
-                start: qrRect.origin,
-                end: CGPoint(x: qrRect.maxX, y: qrRect.maxY),
+                start: cardRect.origin,
+                end: CGPoint(x: cardRect.maxX, y: cardRect.maxY),
                 options: [.drawsBeforeStartLocation, .drawsAfterEndLocation]
             )
 
-            let iconPt  = qrRect.width * 0.55
+            let iconPt  = cardRect.width * 0.55
             let symConf = UIImage.SymbolConfiguration(pointSize: iconPt, weight: .bold)
             if let sym = UIImage(systemName: brand.sfSymbol, withConfiguration: symConf)?
                 .withTintColor(.white, renderingMode: .alwaysOriginal) {
-                let iw = qrRect.width  * 0.55
-                let ih = qrRect.height * 0.55
-                let ir = CGRect(x: qrRect.midX - iw / 2,
-                                y: qrRect.midY - ih / 2,
+                let iw = cardRect.width  * 0.55
+                let ih = cardRect.height * 0.55
+                let ir = CGRect(x: cardRect.midX - iw / 2,
+                                y: cardRect.midY - ih / 2,
                                 width: iw, height: ih)
                 sym.draw(in: ir, blendMode: .normal, alpha: 0.22)
             }
@@ -133,11 +139,11 @@ enum QRStyleRenderer {
         } else if usesCardLayout {
             // Solid Colour › `backgroundHex` on the inner card (same geometry as brand).
             ctx.saveGState()
-            let cardClip = UIBezierPath(roundedRect: qrRect, cornerRadius: qrRect.width * 0.05)
+            let cardClip = UIBezierPath(roundedRect: cardRect, cornerRadius: cardRect.width * 0.05)
             ctx.addPath(cardClip.cgPath)
             ctx.clip()
             ctx.setFillColor(bg.cgColor)
-            ctx.fill(qrRect)
+            ctx.fill(cardRect)
             ctx.restoreGState()
         }
 

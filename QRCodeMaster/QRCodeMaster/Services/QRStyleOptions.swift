@@ -102,7 +102,7 @@ struct QRStyleOptions: Codable, Equatable, Sendable {
     init(
         foregroundHex: String = "#000000",
         backgroundHex: String = "#FFFFFF",
-        errorCorrection: String = "M",
+        errorCorrection: String = "H",
         moduleShape: ModuleShape = .square,
         eyeStyle: EyeStyle = .square,
         frameId: String? = nil,
@@ -148,7 +148,7 @@ struct QRStyleOptions: Codable, Equatable, Sendable {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         foregroundHex        = (try? c.decode(String.self,      forKey: .foregroundHex))       ?? "#000000"
         backgroundHex        = (try? c.decode(String.self,      forKey: .backgroundHex))       ?? "#FFFFFF"
-        errorCorrection      = (try? c.decode(String.self,      forKey: .errorCorrection))     ?? "M"
+        errorCorrection      = (try? c.decode(String.self,      forKey: .errorCorrection))     ?? "H"
         moduleShape          = (try? c.decode(ModuleShape.self, forKey: .moduleShape))         ?? .square
         eyeStyle             = (try? c.decode(EyeStyle.self,    forKey: .eyeStyle))            ?? .square
         frameId              = try? c.decode(String.self,       forKey: .frameId)

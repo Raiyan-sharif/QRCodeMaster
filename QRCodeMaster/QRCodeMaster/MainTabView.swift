@@ -53,6 +53,9 @@ struct MainTabView: View {
                                                @ViewBuilder content: () -> Content) -> some View {
         NavigationStack { content() }
             .opacity(selectedTab == tag ? 1 : 0)
+            .allowsHitTesting(selectedTab == tag)
+            .accessibilityHidden(selectedTab != tag)
+            .zIndex(selectedTab == tag ? 1 : 0)
             // Slide toward the selected direction + fade
             .offset(x: selectedTab == tag ? 0 : (tag < selectedTab ? -22 : 22))
             .scaleEffect(selectedTab == tag ? 1 : 0.97)
@@ -75,6 +78,7 @@ struct MainTabView: View {
         .padding(.bottom, bottomPad)
         .background(.ultraThinMaterial)
         .overlay(Divider(), alignment: .top)
+        .zIndex(100)
     }
 
     private func tabButton(_ tab: TabItem) -> some View {

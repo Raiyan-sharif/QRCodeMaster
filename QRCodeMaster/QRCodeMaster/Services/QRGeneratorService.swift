@@ -12,7 +12,9 @@ enum QRGeneratorService {
         guard let data = message.data(using: .utf8) else { return nil }
         guard let filter = CIFilter(name: "CIQRCodeGenerator") else { return nil }
         filter.setValue(data, forKey: "inputMessage")
-        filter.setValue(correctionLevel, forKey: "inputCorrectionLevel")
+        // Default to high correction so unknown/invalid values do not reduce scan reliability.
+        let normalizedCorrection = normalizedCorrectionLevel(correctionLevel)
+        filter.setValue(normalizedCorrection, forKey: "inputCorrectionLevel")
         return filter.outputImage
     }
 
@@ -63,5 +65,14 @@ enum QRGeneratorService {
         else { return nil }
         ctx.draw(cgImage, in: CGRect(x: 0, y: 0, width: w, height: h))
         return buffer
+    }
+
+    private static func normalizedCorrectionLevel(_ rawValue: String) -> String {
+        switch rawValue.uppercased() {
+        case "L", "M", "Q", "H":
+            return rawValue.uppercased()
+        default:
+            return "H"
+        }
     }
 }

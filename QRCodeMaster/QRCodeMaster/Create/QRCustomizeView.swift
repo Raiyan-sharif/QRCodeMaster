@@ -741,8 +741,13 @@ struct QRCustomizeView: View {
                     .padding(.horizontal, 16)
             }
 
-            Text("Logo correction level")
+            Text("QR error correction level")
                 .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 16)
+
+            Text("Higher levels improve scan reliability. H is recommended.")
+                .font(.caption2)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 16)
 

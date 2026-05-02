@@ -20,7 +20,7 @@ enum QRReadabilityAdvisor {
     }
 
     static let densePayloadThreshold = 120
-    private static let outputPoints: CGFloat = 512
+    private static let outputPoints: CGFloat = 768
     private static let context = CIContext(options: [.useSoftwareRenderer: false])
 
     static func analyze(payload: String, style: QRStyleOptions, hasLogo: Bool) -> Report {

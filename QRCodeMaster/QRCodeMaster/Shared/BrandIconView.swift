@@ -3,8 +3,9 @@
 //  QRCodeMaster
 //
 //  Displays an app-icon-style cell for each brand.
-//  Tries to load the real brand logo from Clearbit CDN (transparent PNG).
-//  Falls back to a custom-drawn mark when offline / no URL.
+//  Uses custom-drawn marks (no remote logos) so the grid works offline and
+//  avoids noisy URLSession / DNS failures in the console (e.g. Clearbit on
+//  some networks or simulators).
 //  All cells render at 90 % opacity as requested.
 //
 
@@ -13,37 +14,6 @@ import SwiftUI
 struct BrandIconView: View {
     let brand: QRBackgroundTemplateCatalog.BrandItem
     var size: CGFloat = 64
-
-    // Map brand IDs → Clearbit logo URL (transparent-background PNG, 128 px)
-    private static let clearbitURLs: [String: String] = [
-        "brand_instagram":   "https://logo.clearbit.com/instagram.com?size=128",
-        "brand_whatsapp":    "https://logo.clearbit.com/whatsapp.com?size=128",
-        "brand_facebook":    "https://logo.clearbit.com/facebook.com?size=128",
-        "brand_youtube":     "https://logo.clearbit.com/youtube.com?size=128",
-        "brand_tiktok":      "https://logo.clearbit.com/tiktok.com?size=128",
-        "brand_snapchat":    "https://logo.clearbit.com/snapchat.com?size=128",
-        "brand_spotify":     "https://logo.clearbit.com/spotify.com?size=128",
-        "brand_telegram":    "https://logo.clearbit.com/telegram.org?size=128",
-        "brand_discord":     "https://logo.clearbit.com/discord.com?size=128",
-        "brand_reddit":      "https://logo.clearbit.com/reddit.com?size=128",
-        "brand_x":           "https://logo.clearbit.com/x.com?size=128",
-        "brand_line":        "https://logo.clearbit.com/line.me?size=128",
-        "brand_linkedin":    "https://logo.clearbit.com/linkedin.com?size=128",
-        "brand_pinterest":   "https://logo.clearbit.com/pinterest.com?size=128",
-        "brand_viber":       "https://logo.clearbit.com/viber.com?size=128",
-        "brand_wechat":      "https://logo.clearbit.com/wechat.com?size=128",
-        "brand_paypal":      "https://logo.clearbit.com/paypal.com?size=128",
-        "brand_skype":       "https://logo.clearbit.com/skype.com?size=128",
-        "brand_messenger":   "https://logo.clearbit.com/messenger.com?size=128",
-        "brand_truthsocial": "https://logo.clearbit.com/truthsocial.com?size=128",
-        "brand_bnb":         "https://logo.clearbit.com/binance.com?size=128",
-        "brand_ethereum":    "https://logo.clearbit.com/ethereum.org?size=128",
-        "brand_bitcoin":     "https://logo.clearbit.com/bitcoin.org?size=128",
-    ]
-
-    private var logoURL: URL? {
-        Self.clearbitURLs[brand.id].flatMap { URL(string: $0) }
-    }
 
     // MARK: - Body
 
@@ -62,26 +32,7 @@ struct BrandIconView: View {
                     )
                 )
 
-            // Logo mark — Clearbit image when online, custom drawing offline
-            if let url = logoURL {
-                AsyncImage(url: url) { phase in
-                    switch phase {
-                    case .success(let image):
-                        // Screen blend: white pixels in the logo become transparent
-                        // so the gradient background shows through naturally.
-                        image
-                            .resizable()
-                            .scaledToFit()
-                            .frame(width: size * 0.68, height: size * 0.68)
-                            .blendMode(.screen)
-                    default:
-                        // Offline / loading: show custom drawing immediately
-                        fallbackMark
-                    }
-                }
-            } else {
-                fallbackMark
-            }
+            fallbackMark
         }
         .frame(width: size, height: size)
         .clipShape(RoundedRectangle(cornerRadius: size * 0.22, style: .continuous))

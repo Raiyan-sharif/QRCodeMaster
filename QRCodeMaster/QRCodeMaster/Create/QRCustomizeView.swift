@@ -978,7 +978,7 @@ struct QRCustomizeView: View {
                     message: msg,
                     options: opts,
                     logo: logo,
-                    outputPoints: 512,
+                    outputPoints: 768,
                     showWatermark: watermark
                 )
             }.value

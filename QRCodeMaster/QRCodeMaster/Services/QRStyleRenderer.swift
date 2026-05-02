@@ -21,7 +21,7 @@ enum QRStyleRenderer {
         message: String,
         options: QRStyleOptions,
         logo: UIImage?,
-        outputPoints: CGFloat = 512,
+        outputPoints: CGFloat = 768,
         showWatermark: Bool
     ) -> UIImage? {
         // Extract the module matrix at NATIVE QR resolution (1 pixel per module).

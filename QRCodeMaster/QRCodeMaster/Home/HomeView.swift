@@ -192,9 +192,12 @@ struct HomeView: View {
                 gridButton(title: "Template", systemImage: "square.grid.2x2") {
                     selectedTab = 1
                 }
-                gridButton(title: "Batch Scan", systemImage: "viewfinder.rectangular") {
-                    showComingSoon = "Batch scanning will be available in a future update."
+                NavigationLink {
+                    BatchScanView()
+                } label: {
+                    gridCell(title: "Batch Scan", systemImage: "viewfinder.rectangular")
                 }
+                .buttonStyle(.plain)
                 gridButton(title: "Create Gif", systemImage: "photo.on.rectangle.angled") {
                     showComingSoon = "Animated QR export is planned for a future release."
                 }

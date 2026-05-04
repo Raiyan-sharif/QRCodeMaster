@@ -1,6 +1,6 @@
 # QRCodeMaster
 
-An iOS app for **creating**, **customising**, and **scanning** QR codes and barcodes — with 31 payload types, rich style controls, brand-themed backgrounds, 12 finder-eye shapes, decorative templates, fluid screen-transition animations, and a full saved-code library.
+An iOS app for **creating**, **customising**, and **scanning** QR codes and barcodes — with 31 payload types, rich style controls, brand-themed backgrounds, 12 finder-eye shapes, decorative templates, **batch scanning** from Home, fluid screen-transition animations, and a full saved-code library.
 
 ## Contents
 
@@ -45,10 +45,12 @@ Tip: If readability is important, avoid low-contrast foreground/background combi
 
 ### 3) Verify before sharing
 
-On the saved preview screen, tap **Verify QR** to test if the generated code is readable.  
+On the saved preview screen, tap **Verify QR Code** to test if the generated code is readable.  
+Verification uses **Apple Vision** with several passes (orientation, upscaling, high-contrast mono) so styled QRs are more likely to decode in-app than with a single raw bitmap pass. Real-world scanners can still differ; Vision is intentionally strict.
+
 This is useful after applying heavy styling, logos, or decorative backgrounds.
 
-The customizer also runs a **Readability Advisor** during style changes: contrast, logo coverage, module size, quiet zone, and decorative-shape risk are analyzed so the app can suggest safer settings before export.
+The customizer also runs a **Readability Advisor** during style changes: contrast, logo coverage, module size, quiet zone, and decorative-shape risk are analyzed so the app can suggest safer settings before export. New styles default to **error correction H** for stronger recovery.
 
 ### 4) Save and share
 
@@ -58,11 +60,18 @@ The customizer also runs a **Readability Advisor** during style changes: contras
 
 ### 5) Scan codes
 
+**Single scan (Scan tab)**
+
 1. Open **Scan**.
 2. Point camera at a QR/barcode.
 3. `http/https` links open safely in browser.
 4. Non-link payloads stay in-app so you can copy them.
 5. Use **Save to Folder** (clipboard helper) to save pasted text directly.
+
+**Batch scan (Home → Quick actions → Batch Scan)**
+
+1. Scan many codes in one session; **URLs are not opened automatically** so you can keep scanning.
+2. Use the **⋯** menu to **Copy all text**, **Save all to Drafts**, or **Clear list**. Swipe left on a row to remove one entry.
 
 ### 6) Manage Drafts
 
@@ -77,12 +86,12 @@ The customizer also runs a **Readability Advisor** during style changes: contras
 
 | Tab | Description |
 |-----|-------------|
-| **Home** | Quick-create shortcuts (QR / Barcode), template gallery preview, trending-style cards, gear icon opens **Mine**. Staggered entrance on appear; primary cards and quick actions use press-scale feedback. |
+| **Home** | Quick-create shortcuts (QR / Barcode), **Batch Scan** (multi-code session → Drafts / copy all), template shortcut, trending-style cards, gear icon opens **Mine**. Staggered entrance on appear; primary cards and quick actions use press-scale feedback. |
 | **Template** | **27** procedural full-canvas backgrounds, each assigned to **exactly one** gallery filter: **Hot**, **Social**, **Love**, **Vcard**, **Business**, **Wifi** (no template is listed under more than one tab). Tapping a cell opens Create → Customize with that template pre-selected. |
 | **Scan** | Camera scanner for QR codes and all major barcode formats. Safe URL opening for `http`/`https`; non-URL payloads stay in-app for copy. Clipboard helper is labeled **Save to Folder** and confirms before saving. |
 | **Drafts** | SwiftData-backed library with folders, favorites, full-text search, detail view, share, save-to-photos, and native swipe-to-delete rows. |
 
-Tab switching is implemented in `MainTabView` with a **custom tab bar** (not `TabView`): see [Motion & transitions](#motion--transitions).
+Tab switching uses SwiftUI **`TabView`** with a material tab bar (`MainTabView`) so system hit-testing and safe areas behave correctly on all device sizes.
 
 ### QR Creation — 31 payload types across 4 pages
 
@@ -111,7 +120,7 @@ Type selection and input-area transitions are described under [Motion & transiti
 
 Customize toolbar and preview animations: [Motion & transitions](#motion--transitions).
 
-Generated output preview (`QRSavedView`) also includes a **Verify QR** action backed by `QRImageVerifier` (Vision) so users can quickly confirm the final styled code remains machine-readable before sharing.
+Generated output preview (`QRSavedView`) also includes **Verify QR Code**, backed by `QRImageVerifier` (Vision, multi-pass). The live customizer preview uses the same verifier after each render. Preview/export raster size defaults to **768 pt** for sharper modules (better for Vision and for sharing).
 
 ### Readability guardrails
 
@@ -145,15 +154,15 @@ All finder-eye voids use an **even-odd fill rule** so the background (solid, tem
 
 ### Brand icon cells
 
-`BrandIconView` (Color panel grid only) loads the real brand logo from the **Clearbit CDN** (`logo.clearbit.com`) when online, overlaid on the brand's gradient using `.blendMode(.screen)`. Falls back to custom-drawn marks / SF Symbol composites when offline. Whole cell at **90 % opacity**.
+`BrandIconView` (Color panel grid only) draws **custom marks** and SF Symbol composites on each brand gradient (no remote image loads), so the picker works fully **offline** and avoids noisy network failures in development. Whole cell at **90 % opacity**.
 
-The **exported QR** does not embed remote bitmaps: `QRStyleRenderer` draws the inner card with the same gradient colours and a low-opacity **system SF Symbol** for that brand so exports stay fast, offline-safe, and consistent with the picker’s icon family.
+The **exported QR** uses the same approach: `QRStyleRenderer` draws the inner card with gradient colours and a low-opacity **system SF Symbol** for that brand so exports stay fast and consistent with the picker.
 
 ### Motion & transitions
 
 | Area | Behaviour | Primary types / files |
 |------|-----------|-------------------------|
-| **Root tabs** | Custom tab bar; inactive tabs are opacity-hidden with a small horizontal offset and scale; spring animation on change; selected tab icon scales up with a spring. All four `NavigationStack`s remain mounted so camera, navigation, and scroll state persist. | `MainTabView.swift` |
+| **Root tabs** | Native `TabView` + `tabItem` labels; material tab bar background. Each tab owns a `NavigationStack` (standard lazy behaviour). | `MainTabView.swift` |
 | **Home** | Header → primary cards → quick actions → trending appear in sequence (slide up + fade, staggered delays). | `HomeView.swift` |
 | **Create** | Selected payload type icon springs to ~108 %; changing type re-identifies the input block with asymmetric slide + opacity. Type grid buttons use `PressScaleButtonStyle`. | `QRCreateView.swift`, `PressScaleButtonStyle.swift` |
 | **Customize** | Opening / switching panels uses direction-aware slide (based on panel order) + opacity; tool icons scale when active; each finished QR render bumps `renderVersion` so the preview image cross-fades. | `QRCustomizeView.swift` |
@@ -181,18 +190,20 @@ QRCodeMaster/QRCodeMaster/
 │   └── CodeDetailView.swift
 ├── Scanner/
 │   ├── ScannerView.swift
+│   ├── BatchScanView.swift        # Multi-scan session from Home; save-all to Drafts
 │   └── MetadataScannerView.swift
 ├── Services/
-│   ├── QRGeneratorService.swift         # CIFilter QR + module-matrix extraction
+│   ├── QRGeneratorService.swift         # CIFilter QR + module-matrix extraction; correction level normalized (falls back to H)
 │   ├── QRStyleRenderer.swift            # CoreGraphics renderer (background, modules, eyes, logo, frame, caption)
-│   ├── QRStyleOptions.swift             # Style model — Codable, Equatable, backward-compat
+│   ├── QRStyleOptions.swift             # Style model — Codable, Equatable, backward-compat; default error correction H
 │   ├── QRPayloadEncoder.swift           # 31 payload types + structured payload structs
 │   ├── QRBackgroundTemplateCatalog.swift # 27 categorized decorative templates + 22 brand items
 │   ├── QRReadabilityAdvisor.swift       # Risk scoring + safe-style fallback actions
+│   ├── QRImageVerifier.swift            # Vision barcode verify (multi-pass) vs expected payload
 │   ├── BarcodeGeneratorService.swift
 │   └── EAN13Encoder.swift
 ├── Shared/
-│   ├── BrandIconView.swift        # AsyncImage Clearbit + offline fallback
+│   ├── BrandIconView.swift        # Brand grid: custom-drawn marks on gradients (offline)
 │   ├── CountryPickerSheet.swift   # Searchable country / dial-code picker
 │   └── PressScaleButtonStyle.swift # Reusable press-scale button feedback
 ├── Settings/
@@ -207,22 +218,25 @@ QRCodeMaster/QRCodeMaster/
 │   ├── ShareSheet.swift
 │   └── PhotoLibrarySaver.swift
 ├── AppEnvironment.swift
-├── MainTabView.swift               # Custom animated tab bar; four persistent NavigationStacks
+├── MainTabView.swift               # TabView shell; Home / Template / Scan / Drafts
 ├── QRCodeMasterApp.swift
-└── ModelContainer+App.swift
+└── ModelContainer+App.swift      # Ensures Application Support exists before SwiftData store URL
 ```
 
 ### Key design decisions
 
 | Decision | Rationale |
 |----------|-----------|
-| Module-matrix extraction at native QR resolution | Prevents `count == outputPoints` (512) confusion that breaks the 7×7 finder-region guard. |
+| Module-matrix extraction at native QR resolution | Prevents `count == outputPoints` (export size) confusion that breaks the 7×7 finder-region guard. |
 | Even-odd winding for finder-eye voids | Leaves the void area truly transparent so any background (template, brand gradient) shows through. |
 | Brand background as inner-card gradient + logo mark | Full-canvas gradient was user-reported wrong; `ctx.clip()` + `ctx.drawLinearGradient` restricts it to the inner 72 % rect. |
 | Direct `CGContext.drawLinearGradient` for brand step | Avoids nested `UIGraphicsBeginImageContextWithOptions` context issues that broke clipping when using intermediate `UIImage.draw`. |
 | `Task.detached` for rendering | Keeps the main actor / SwiftUI free during the ~50 ms CoreGraphics render. |
 | Manual `Codable` on `QRStyleOptions` | Backward-compatible decoding: unknown keys fall back to defaults rather than throwing. |
-| Opacity-hidden tabs instead of lazy `if selectedTab == X` | All four NavigationStacks remain in the view hierarchy at all times; camera sessions, navigation stacks, and scroll positions survive tab switches. |
+| Native `TabView` for root navigation | Reliable hit testing and safe-area behaviour across devices (replacing a custom overlay tab bar). |
+| `ModelContainer` store URL | Application Support directory is created up front so SwiftData does not race on first launch. |
+| `QRImageVerifier` multi-pass Vision | Correct EXIF orientation, optional upscale, high-contrast mono, and latest supported barcode revision to reduce false “unreadable” results on styled QRs. |
+| Default error correction **H** | Stronger QR recovery; invalid stored correction strings fall back to H in `QRGeneratorService`. |
 | `renderVersion` Int bumped per render | Gives each QR image a unique `.id()` so SwiftUI replaces it with a cross-fade transition rather than an in-place swap. |
 | `PressScaleButtonStyle` with configurable `scale` | Centralises press-feedback so every tappable surface (primary cards, grid buttons, type icons) shares one consistent spring curve. |
 | Direction-aware panel slide in `QRCustomizeView` | `prevPanel` index comparison determines `.leading` vs `.trailing` edge so the panel always slides in the intuitive direction. |
@@ -258,7 +272,6 @@ xcodebuild -scheme QRCodeMaster \
 ## Roadmap
 
 - **StoreKit VIP / IAP** — wire to existing `SubscriptionStatusProvider` seam; premium badge cells are already in the UI.
-- **Batch scan** — placeholder button in `ScannerView`.
 - **Cloud sync** — placeholder toggle in `MineView`.
 - **AdMob / ads** — banner slot reserved in `HomeView`.
 

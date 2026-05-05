@@ -9,9 +9,17 @@ An iOS app for **creating**, **customising**, and **scanning** QR codes and barc
 - [Requirements](#requirements)
 - [Architecture](#architecture)
 - [Building](#building)
-- [Privacy entitlements](#privacy-entitlements)
+- [Privacy Entitlements](#privacy-entitlements)
 - [Roadmap](#roadmap)
 - [License](#license)
+
+### Quick links
+
+- [QR Creation — 31 payload types across 4 pages](#qr-creation--31-payload-types-across-4-pages)
+- [Customize panel (6 tabs)](#customize-panel-6-tabs)
+- [Readability guardrails](#readability-guardrails)
+- [Motion & transitions](#motion--transitions)
+- [Key design decisions](#key-design-decisions)
 
 ## Requirements
 
@@ -276,3 +284,6 @@ xcodebuild -scheme QRCodeMaster \
 - **AdMob / ads** — banner slot reserved in `HomeView`.
 
 ## License
+
+No open-source license file is currently included in this repository.  
+Unless stated otherwise, treat this code as all rights reserved.

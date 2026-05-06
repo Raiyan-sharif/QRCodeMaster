@@ -905,6 +905,7 @@ struct QRCustomizeView: View {
                 spacing: 12
             ) {
                 ForEach(QRStyleOptions.EyeStyle.allCases, id: \.rawValue) { eye in
+                    let disabledByDenseMode = isDensePayload && eye != .square
                     Button { style.eyeStyle = eye } label: {
                         VStack(spacing: 6) {
                             EyeStylePreview(style: eye)
@@ -920,6 +921,8 @@ struct QRCustomizeView: View {
                         }
                     }
                     .buttonStyle(.plain)
+                    .disabled(disabledByDenseMode)
+                    .opacity(disabledByDenseMode ? 0.45 : 1.0)
                 }
             }
             .padding(.horizontal, 16)

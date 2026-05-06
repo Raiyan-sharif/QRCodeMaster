@@ -9,6 +9,8 @@ import UIKit
 
 enum QRStyleRenderer {
     private static let context = CIContext(options: [.useSoftwareRenderer: false])
+    /// ISO guidance is 4 modules; smaller quiet zones often fail stricter decoders.
+    private static let defaultQuietZoneModules: Int = 4
 
     /// Share of the export square used by the QR matrix when a template is active.
     private static let templateQRRelativeSide: CGFloat = 0.68
@@ -72,7 +74,7 @@ enum QRStyleRenderer {
             moduleScale  = qrRect.width / CGFloat(n)
             matrixOrigin = qrRect.origin
         } else {
-            let quietZone   = 3                                    // modules of white border each side
+            let quietZone   = Self.defaultQuietZoneModules         // modules of white border each side
             moduleScale     = outputPoints / CGFloat(n + quietZone * 2)
             let qrOffset    = CGFloat(quietZone) * moduleScale
             qrRect          = CGRect(x: qrOffset, y: qrOffset,

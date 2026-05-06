@@ -8,6 +8,7 @@ import Foundation
 import UIKit
 
 enum QRReadabilityAdvisor {
+    private static let minimumQuietZoneModules: Double = 4
     struct Report: Equatable, Sendable {
         let contrastRatio: Double
         let logoCoveragePercent: Double
@@ -33,7 +34,8 @@ enum QRReadabilityAdvisor {
                 let margin = (outputPoints - qrSide) / 2
                 return Double(margin / modulePixels)
             }
-            return 2
+            // Plain layout renders with a fixed quiet zone around the matrix.
+            return minimumQuietZoneModules
         }()
 
         let contrast = contrastRatio(foreground: style.foregroundUIColor(), background: style.backgroundUIColor())
@@ -97,6 +99,7 @@ enum QRReadabilityAdvisor {
         if report.densePayload {
             next.errorCorrection = "H"
             next.moduleShape = .square
+            next.eyeStyle = .square
             next.logoMaxRelativeSize = min(next.logoMaxRelativeSize, 0.16)
             next.brandBackgroundId = nil
             next.backgroundTemplateId = nil
@@ -108,6 +111,7 @@ enum QRReadabilityAdvisor {
                 next.backgroundHex = "#FFFFFF"
             }
             if isRiskyShape(next.moduleShape) { next.moduleShape = .square }
+            if isDecorativeEyeStyle(next.eyeStyle) { next.eyeStyle = .square }
             next.logoMaxRelativeSize = min(next.logoMaxRelativeSize, 0.18)
             if next.errorCorrection == "L" || next.errorCorrection == "M" {
                 next.errorCorrection = "H"
@@ -129,6 +133,7 @@ enum QRReadabilityAdvisor {
             updated.errorCorrection = "H"
         case .simplifyModules:
             updated.moduleShape = .square
+            updated.eyeStyle = .square
             updated.preferReadabilityUnderlay = true
         case .applyAll:
             updated.foregroundHex = "#000000"
@@ -136,6 +141,7 @@ enum QRReadabilityAdvisor {
             updated.logoMaxRelativeSize = min(updated.logoMaxRelativeSize, 0.16)
             updated.errorCorrection = "H"
             updated.moduleShape = .square
+            updated.eyeStyle = .square
             updated.preferReadabilityUnderlay = true
         }
         return updated

@@ -123,7 +123,7 @@ Type selection and input-area transitions are described under [Motion & transiti
 | **Color** | Foreground hex, background solid swatches. **Background → Image**: 22 brand cells (see `QRBackgroundTemplateCatalog.brandItems`: Instagram, WhatsApp, Facebook, Pinterest, Viber, Snapchat, Skype, Spotify, YouTube, PayPal, TikTok, LINE, LinkedIn, WeChat, X, Bitcoin, Ethereum, BNB, Telegram, Messenger, Discord, Reddit). Brand selection paints the brand gradient plus a **subtle centred SF Symbol** (same identifier as the picker) into the inner QR card; the outer canvas stays white or shows the decorative template. |
 | **Logo** | Photo picker; scales to at most 22 % of QR width with a white backdrop. |
 | **Text** | Caption label drawn below the exported image. |
-| **Dots** | 7 module shapes: Square, Rounded, Dot, **2×2 / 3×3 / 4×4 Dots** (N×N halftone circles per dark module), Diamond. |
+| **Dots** | 11 module shapes: Square, Rounded, Dot, **2×2 / 3×3 / 4×4 / 5×5 Dots**, **3×2 Dots**, **Plus Dots**, **Photo dots**, Diamond. |
 | **Eyes** | 12 finder-eye styles (see table below). |
 
 Customize toolbar and preview animations: [Motion & transitions](#motion--transitions).
@@ -133,7 +133,8 @@ Generated output preview (`QRSavedView`) also includes **Verify QR Code**, backe
 ### Readability guardrails
 
 - `QRReadabilityAdvisor` scores style risk using contrast ratio, quiet-zone estimate, module pixel size, payload density, logo coverage, and decorative-style penalties.
-- Dense/high-risk combinations can trigger safe defaults: black-on-white colors, square modules, smaller logo cap, higher error correction (`H`), and readability underlay preference.
+- Dense/high-risk combinations can trigger safe defaults: black-on-white colors, square modules, square finder eyes, smaller logo cap, higher error correction (`H`), and readability underlay preference.
+- Dense payload mode constrains styling in the customizer (non-square module/eye styles are disabled) to preserve decode reliability.
 - One-tap fix actions are exposed for common issues (`Increase Contrast`, `Reduce Logo`, `Simplify Dots`, `Apply All & Retry`).
 
 #### 12 finder-eye styles
@@ -244,6 +245,7 @@ QRCodeMaster/QRCodeMaster/
 | Native `TabView` for root navigation | Reliable hit testing and safe-area behaviour across devices (replacing a custom overlay tab bar). |
 | `ModelContainer` store URL | Application Support directory is created up front so SwiftData does not race on first launch. |
 | `QRImageVerifier` multi-pass Vision | Correct EXIF orientation, optional upscale, high-contrast mono, and latest supported barcode revision to reduce false “unreadable” results on styled QRs. |
+| 4-module quiet zone in plain layout | Matches common QR decoding guidance; improves compatibility with stricter scanners/vision passes compared with tighter margins. |
 | Default error correction **H** | Stronger QR recovery; invalid stored correction strings fall back to H in `QRGeneratorService`. |
 | `renderVersion` Int bumped per render | Gives each QR image a unique `.id()` so SwiftUI replaces it with a cross-fade transition rather than an in-place swap. |
 | `PressScaleButtonStyle` with configurable `scale` | Centralises press-feedback so every tappable surface (primary cards, grid buttons, type icons) shares one consistent spring curve. |

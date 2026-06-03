@@ -95,23 +95,48 @@ enum QRReadabilityAdvisor {
         )
     }
 
+    /// Strongest scan-safe preset — used when Vision cannot decode the styled export.
+    static func applyingMaximumReliability(to style: QRStyleOptions, hasLogo: Bool) -> QRStyleOptions {
+        var next = style
+        next.foregroundHex = "#000000"
+        next.backgroundHex = "#FFFFFF"
+        next.errorCorrection = "H"
+        next.moduleShape = .square
+        next.eyeStyle = .square
+        next.backgroundTemplateId = nil
+        next.brandBackgroundId = nil
+        next.outerBorderHex = nil
+        next.moduleDotPatternJPEG = nil
+        next.preferReadabilityUnderlay = false
+        if hasLogo {
+            next.logoMaxRelativeSize = min(next.logoMaxRelativeSize, 0.14)
+        }
+        return next
+    }
+
     static func applyingSafeDefaults(to style: QRStyleOptions, payload: String, hasLogo: Bool) -> QRStyleOptions {
         let report = analyze(payload: payload, style: style, hasLogo: hasLogo)
         var next = style
 
-        if hasLogo {
-            switch next.errorCorrection.uppercased() {
-            case "L", "M":
-                next.errorCorrection = "H"
-            case "Q" where report.logoCoveragePercent > 12:
-                next.errorCorrection = "H"
-            default:
-                break
-            }
-            next.logoMaxRelativeSize = min(next.logoMaxRelativeSize, 0.20)
+        // Export bitmaps always use high correction — cheap insurance for styled modules / logos.
+        if next.errorCorrection != "H" {
+            next.errorCorrection = "H"
         }
 
-        if usesCardLayout(style: next) || next.brandBackgroundId != nil || next.backgroundTemplateId != nil {
+        if hasLogo {
+            next.logoMaxRelativeSize = min(next.logoMaxRelativeSize, 0.18)
+        }
+
+        let styledBackground = usesCardLayout(style: next)
+        if styledBackground || hasLogo || isRiskyShape(next.moduleShape) {
+            next.moduleShape = .square
+            next.moduleDotPatternJPEG = nil
+        }
+        if styledBackground || hasLogo || isDecorativeEyeStyle(next.eyeStyle) {
+            next.eyeStyle = .square
+        }
+
+        if styledBackground {
             next.preferReadabilityUnderlay = true
         }
 
@@ -204,12 +229,7 @@ enum QRReadabilityAdvisor {
     }
 
     private static func isRiskyShape(_ shape: QRStyleOptions.ModuleShape) -> Bool {
-        switch shape {
-        case .square, .rounded:
-            return false
-        default:
-            return true
-        }
+        shape != .square
     }
 
     private static func isDecorativeEyeStyle(_ eye: QRStyleOptions.EyeStyle) -> Bool {

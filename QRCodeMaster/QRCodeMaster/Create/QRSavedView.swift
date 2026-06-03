@@ -88,6 +88,10 @@ struct QRSavedView: View {
         } message: {
             Text("Widget support will be available in a future update.")
         }
+        .task {
+            guard verificationOutcome == .idle else { return }
+            await verifyTapped()
+        }
     }
 
     // MARK: - Verify QR

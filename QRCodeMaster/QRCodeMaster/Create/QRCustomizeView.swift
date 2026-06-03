@@ -29,6 +29,7 @@ struct QRCustomizeView: View {
 
     // Animation state
     @State private var renderVersion: Int = 0    // incremented each render → drives cross-fade
+    @State private var renderGeneration: Int = 0 // drops stale async results when style changes quickly
     @State private var prevPanel: Panel? = nil   // used to determine slide direction
 
     // Color panel state
@@ -945,7 +946,7 @@ struct QRCustomizeView: View {
             payload: payload,
             hasLogo: logoImage != nil
         ) {
-            autoAdjustMessage = "Preview export follows QR scan rules (quiet zone, contrast, correction, and safer modules)."
+            autoAdjustMessage = "Saved export will apply scan-safe adjustments; the live preview shows your current selections."
         } else if readabilityReport?.riskHigh == true {
             autoAdjustMessage = "Readability risk detected. Use Verify QR or Apply Fix & Retry after saving."
         } else {
@@ -972,45 +973,58 @@ struct QRCustomizeView: View {
     private func regenerate() {
         renderTask?.cancel()
         previewVerifyTask?.cancel()
-        previewVerificationOutcome = .verifying
-        guard !payload.isEmpty else { rendered = nil; return }
+        guard !payload.isEmpty else {
+            rendered = nil
+            previewVerificationOutcome = .idle
+            return
+        }
 
-        // Capture all needed state before leaving the main actor.
+        renderGeneration += 1
+        let generation = renderGeneration
+
         let msg       = payload
         let opts      = style
         let logo      = logoImage
         let watermark = features.watermarkEnabled
 
         isRendering = true
+        previewVerificationOutcome = .verifying
+
         renderTask = Task {
-            // Render on a background thread so the main thread (and SwiftUI)
-            // stay responsive during QR generation (UIGraphicsImageContext is
-            // thread-safe for off-screen image rendering).
+            defer {
+                if generation == renderGeneration {
+                    isRendering = false
+                }
+            }
+
             let image = await Task.detached(priority: .userInitiated) {
                 QRStyleRenderer.render(
                     message: msg,
                     options: opts,
                     logo: logo,
-                    outputPoints: 768,
-                    showWatermark: watermark
+                    showWatermark: watermark,
+                    intent: .livePreview
                 )
             }.value
 
-            guard !Task.isCancelled else { return }
-            withAnimation(.easeInOut(duration: 0.25)) {
-                rendered = image
-            }
-            renderVersion += 1
-            isRendering = false
+            guard !Task.isCancelled, generation == renderGeneration else { return }
 
-            guard let image else {
+            if let image {
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    rendered = image
+                    renderVersion += 1
+                }
+            } else {
+                rendered = nil
                 previewVerificationOutcome = .failed("Renderer returned no image.")
-                return
             }
+            refreshScanAdjustMessage()
+
+            guard let image, generation == renderGeneration else { return }
 
             previewVerifyTask = Task {
                 let verifyResult = await QRImageVerifier.verify(image: image, expectedPayload: msg)
-                guard !Task.isCancelled else { return }
+                guard !Task.isCancelled, generation == renderGeneration else { return }
                 previewVerificationOutcome = verifyResult
             }
         }
@@ -1044,6 +1058,7 @@ struct QRCustomizeView: View {
             await MainActor.run {
                 style.moduleDotPatternJPEG = jpeg
                 style.moduleShape = .photoDots
+                regenerate()
             }
         }
     }
@@ -1067,7 +1082,14 @@ struct QRCustomizeView: View {
     }
 
     private func doSave() {
-        guard let img = rendered, let data = img.pngData() else { return }
+        let exportImage = QRStyleRenderer.render(
+            message: payload,
+            options: style,
+            logo: logoImage,
+            showWatermark: features.watermarkEnabled,
+            intent: .export
+        )
+        guard let img = exportImage ?? rendered, let data = img.pngData() else { return }
         let json = try? JSONEncoder().encode(style)
         let title = payloadType.title + " · " + Date.now.formatted(date: .abbreviated, time: .shortened)
         let item = SavedCode(

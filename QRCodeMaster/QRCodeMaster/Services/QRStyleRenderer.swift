@@ -12,7 +12,7 @@ enum QRStyleRenderer {
 
     /// Shared layout constants (also used by `QRReadabilityAdvisor` preflight).
     enum Layout {
-        static let exportPoints: CGFloat = 768
+        static let exportPoints: CGFloat = 1024
         /// ISO / common decoder guidance: ≥4 light modules around the symbol.
         static let quietZoneModules: Int = 4
         /// Share of the export square used for the inner card when a template/brand is active.
@@ -22,27 +22,43 @@ enum QRStyleRenderer {
     private static let defaultQuietZoneModules: Int = Layout.quietZoneModules
     private static let templateQRRelativeSide: CGFloat = Layout.templateQRRelativeSide
 
+    /// Whether to apply readability overrides before drawing.
+    enum RenderIntent: Sendable {
+        /// Customizer preview — honor the user's colors, shapes, and templates.
+        case livePreview
+        /// Save / share — apply `QRReadabilityAdvisor` safe defaults for scan reliability.
+        case export
+    }
+
     // MARK: - Public
 
     static func render(
         message: String,
         options: QRStyleOptions,
         logo: UIImage?,
-        outputPoints: CGFloat = 768,
-        showWatermark: Bool
+        outputPoints: CGFloat = Layout.exportPoints,
+        showWatermark: Bool,
+        intent: RenderIntent = .export
     ) -> UIImage? {
         // Extract the module matrix at NATIVE QR resolution (1 pixel per module).
         // DO NOT scale before matrix extraction — scaling makes count = outputPoints
         // instead of the real module count, which breaks the finder-region guard
         // and causes eye styles to be ignored entirely.
-        let scanOptions = QRReadabilityAdvisor.applyingSafeDefaults(
-            to: options,
-            payload: message,
-            hasLogo: logo != nil
-        )
+        let drawOptions: QRStyleOptions = {
+            switch intent {
+            case .livePreview:
+                return options
+            case .export:
+                return QRReadabilityAdvisor.applyingSafeDefaults(
+                    to: options,
+                    payload: message,
+                    hasLogo: logo != nil
+                )
+            }
+        }()
 
         guard
-            let ci = QRGeneratorService.makeCIQRCode(message: message, correctionLevel: scanOptions.errorCorrection),
+            let ci = QRGeneratorService.makeCIQRCode(message: message, correctionLevel: drawOptions.errorCorrection),
             let tuple = QRGeneratorService.moduleMatrix(from: ci, context: context)
         else { return nil }
 
@@ -50,19 +66,20 @@ enum QRStyleRenderer {
         let n = tuple.count
         guard n > 0 else { return nil }
 
-        let fg = scanOptions.foregroundUIColor()
-        let bg = scanOptions.backgroundUIColor()
+        let fg = drawOptions.foregroundUIColor()
+        let bg = drawOptions.backgroundUIColor()
         // Decorative template (sunset, ocean…) — full-canvas. Independent of brand background.
-        let templateId  = scanOptions.backgroundTemplateId
+        let templateId  = drawOptions.backgroundTemplateId
         let hasTemplate = templateId.map { !$0.isEmpty && $0.lowercased() != "none" } ?? false
         // Brand colour background (brand_instagram…) — QR area only. Can coexist with decorative template.
-        let brandId     = scanOptions.brandBackgroundId
+        let brandId     = drawOptions.brandBackgroundId
         let hasBrand    = brandId.map { !$0.isEmpty && $0.lowercased() != "none" } ?? false
 
         let size = CGSize(width: outputPoints, height: outputPoints)
         let bounds = CGRect(origin: .zero, size: size)
 
-        UIGraphicsBeginImageContextWithOptions(size, false, 0)
+        // Opaque @1× bitmap — avoids soft alpha/fringing that breaks Vision binarization.
+        UIGraphicsBeginImageContextWithOptions(size, true, 1)
         defer { UIGraphicsEndImageContext() }
         guard let ctx = UIGraphicsGetCurrentContext() else { return nil }
 
@@ -71,6 +88,7 @@ enum QRStyleRenderer {
         let moduleScale: CGFloat
         let cardRect: CGRect        // colored/brand card area
         let qrRect: CGRect          // actual QR module area (logo centering, etc.)
+        let symbolRect: CGRect      // matrix + quiet zone (solid plate for decoders)
         let matrixOrigin: CGPoint   // top-left pixel of module [0,0]
 
         // Use the inset "card" layout whenever either a decorative template or a brand
@@ -95,6 +113,8 @@ enum QRStyleRenderer {
             )
             qrRect = CGRect(x: matrixOrigin.x, y: matrixOrigin.y,
                             width: matrixSide, height: matrixSide)
+            symbolRect = CGRect(x: symbolOrigin.x, y: symbolOrigin.y,
+                                width: symbolSide, height: symbolSide)
         } else {
             let quietZone   = Self.defaultQuietZoneModules         // modules of white border each side
             moduleScale     = outputPoints / CGFloat(n + quietZone * 2)
@@ -104,6 +124,7 @@ enum QRStyleRenderer {
                                      height: CGFloat(n) * moduleScale)
             cardRect        = qrRect
             matrixOrigin    = qrRect.origin
+            symbolRect      = bounds
         }
 
         // ── Step 1: Full-canvas background ──────────────────────────────────────
@@ -171,18 +192,25 @@ enum QRStyleRenderer {
             ctx.restoreGState()
         }
 
-        // Optional readability underlay for noisy backgrounds.
-        if scanOptions.preferReadabilityUnderlay {
+        // Solid symbol plate — full quiet zone + matrix on white so templates/logos cannot bleed into modules.
+        let needsSymbolPlate = usesCardLayout
+            || drawOptions.preferReadabilityUnderlay
+            || logo != nil
+            || hasTemplate
+            || intent == .export
+        if needsSymbolPlate {
             ctx.saveGState()
-            let underlay = UIBezierPath(roundedRect: qrRect, cornerRadius: qrRect.width * 0.05)
-            ctx.addPath(underlay.cgPath)
-            ctx.clip()
-            ctx.setFillColor(UIColor.white.withAlphaComponent(0.86).cgColor)
-            ctx.fill(qrRect)
+            ctx.setFillColor(UIColor.white.cgColor)
+            if usesCardLayout {
+                let plate = UIBezierPath(roundedRect: symbolRect, cornerRadius: symbolRect.width * 0.04)
+                plate.fill()
+            } else {
+                ctx.fill(symbolRect)
+            }
             ctx.restoreGState()
         }
 
-        if let borderHex = scanOptions.outerBorderHex,
+        if let borderHex = drawOptions.outerBorderHex,
            let borderColor = UIColor(hex: borderHex) {
             ctx.saveGState()
             let strokeRect = qrRect.insetBy(dx: -moduleScale * 0.9, dy: -moduleScale * 0.9)
@@ -196,7 +224,7 @@ enum QRStyleRenderer {
 
         let logoBackdrop: UIColor = usesCardLayout ? UIColor.white.withAlphaComponent(0.9) : bg
 
-        let moduleDotImage = scanOptions.moduleDotPatternJPEG.flatMap { UIImage(data: $0) }
+        let moduleDotImage = drawOptions.moduleDotPatternJPEG.flatMap { UIImage(data: $0) }
 
         // ── Draw data modules — skip the three 7×7 finder regions entirely ───────
         for r in 0..<n {
@@ -213,7 +241,7 @@ enum QRStyleRenderer {
                     in: rect,
                     context: ctx,
                     color: fg,
-                    shape: scanOptions.moduleShape,
+                    shape: drawOptions.moduleShape,
                     patternImage: moduleDotImage,
                     qrRect: qrRect
                 )
@@ -228,12 +256,12 @@ enum QRStyleRenderer {
         ]
         for origin in finderOrigins {
             drawFinderPattern(at: origin, moduleScale: moduleScale,
-                              context: ctx, fg: fg, eye: scanOptions.eyeStyle)
+                              context: ctx, fg: fg, eye: drawOptions.eyeStyle)
         }
 
         // Logo overlay
         if let logo {
-            compositeLogo(logo, maxRelative: scanOptions.logoMaxRelativeSize, placementRect: qrRect, context: ctx, background: logoBackdrop)
+            compositeLogo(logo, maxRelative: drawOptions.logoMaxRelativeSize, placementRect: qrRect, context: ctx, background: logoBackdrop)
         }
 
         // Watermark
@@ -251,10 +279,10 @@ enum QRStyleRenderer {
         }
 
         guard let composed = UIGraphicsGetImageFromCurrentImageContext()?.cgImage else { return nil }
-        let ui = UIImage(cgImage: composed, scale: UIScreen.main.scale, orientation: .up)
+        let ui = UIImage(cgImage: composed, scale: 1, orientation: .up)
 
-        let framed = applyFrameIfNeeded(to: ui, frameId: scanOptions.frameId, fg: fg)
-        return applyCaption(to: framed, options: scanOptions)
+        let framed = applyFrameIfNeeded(to: ui, frameId: drawOptions.frameId, fg: fg)
+        return applyCaption(to: framed, options: drawOptions)
     }
 
     // MARK: - Module drawing

@@ -8,8 +8,8 @@ import UIKit
 import Vision
 
 /// Decodes a **rendered** QR bitmap with Vision and compares the payload to what we intended to encode.
-/// Uses several vision passes (orientation, upscale, high-contrast mono) because styled QRs often
-/// fail a single raw `CGImage` decode even when real scanners can read them.
+/// Uses several vision passes (orientation, upscale, high-contrast mono, Core Image detector, crops)
+/// because styled QRs often fail a single raw `CGImage` decode even when real scanners can read them.
 enum QRImageVerifier {
 
     enum Outcome: Equatable, Sendable {
@@ -27,7 +27,7 @@ enum QRImageVerifier {
     private static let ciContext = CIContext(options: [.useSoftwareRenderer: false])
 
     /// Minimum shortest edge in **pixels** for the upscaled pass (Vision is much more reliable with enough resolution).
-    private static let minUpscaleSidePixels: CGFloat = 1200
+    private static let minUpscaleSidePixels: CGFloat = 1600
 
     /// Runs Vision off the main actor so the UI stays responsive.
     static func verify(image: UIImage, expectedPayload: String) async -> Outcome {
@@ -41,25 +41,33 @@ enum QRImageVerifier {
             return .failed("Image has no bitmap data.")
         }
 
+        let expected = expectedPayload.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !expected.isEmpty else {
+            return .failed("Expected payload is empty.")
+        }
+
         let variants = buildVisionVariants(from: image)
         guard !variants.isEmpty else {
             return .failed("Image has no bitmap data.")
         }
 
-        for variant in variants {
-            guard let decoded = decodeQRPayload(cgImage: variant.cgImage, orientation: variant.orientation) else {
-                continue
-            }
-            let trimmed = decoded.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !trimmed.isEmpty else { continue }
+        var mismatch: String?
 
-            let expected = expectedPayload.trimmingCharacters(in: .whitespacesAndNewlines)
-            if payloadsEquivalent(trimmed, expected) {
-                return .validMatchesContent
+        for variant in variants {
+            let payloads = decodeAllQRPayloads(cgImage: variant.cgImage, orientation: variant.orientation)
+            for decoded in payloads {
+                let trimmed = decoded.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !trimmed.isEmpty else { continue }
+                if payloadsEquivalent(trimmed, expected) {
+                    return .validMatchesContent
+                }
+                mismatch = trimmed
             }
-            return .readablePayloadMismatch(found: trimmed)
         }
 
+        if let mismatch {
+            return .readablePayloadMismatch(found: mismatch)
+        }
         return .couldNotReadFromImage
     }
 
@@ -71,64 +79,159 @@ enum QRImageVerifier {
     /// Builds several bitmaps Vision can succeed on: EXIF orientation, upscale, and boosted contrast.
     private static func buildVisionVariants(from image: UIImage) -> [VisionVariant] {
         var out: [VisionVariant] = []
+        var seenKeys = Set<String>()
 
-        // 1) Raw buffer + explicit UIImage orientation (Vision ignores UIImage.orientation on `cgImage` alone).
-        if let cg = image.cgImage {
-            out.append(
-                VisionVariant(
-                    cgImage: cg,
-                    orientation: cgImagePropertyOrientation(for: image.imageOrientation)
-                )
-            )
+        func append(_ cg: CGImage, _ orientation: CGImagePropertyOrientation) {
+            let key = "\(cg.width)x\(cg.height)-\(orientation.rawValue)"
+            guard seenKeys.insert(key).inserted else { return }
+            out.append(VisionVariant(cgImage: cg, orientation: orientation))
         }
 
-        // 2+) Normalized “as displayed” bitmap, then derivative passes (all `.up`).
+        if let cg = image.cgImage {
+            append(cg, cgImagePropertyOrientation(for: image.imageOrientation))
+        }
+
         let flat = orientationNormalizedUIImage(image)
         guard let flatCG = flat.cgImage else { return out }
 
-        out.append(VisionVariant(cgImage: flatCG, orientation: .up))
+        append(flatCG, .up)
 
         let minSide = min(CGFloat(flatCG.width), CGFloat(flatCG.height))
-        if minSide < minUpscaleSidePixels, let big = upscaledBitmap(flat, minSidePixels: minUpscaleSidePixels),
-           let bigCG = big.cgImage {
-            out.append(VisionVariant(cgImage: bigCG, orientation: .up))
+
+        if let big = upscaledBitmap(flat, minSidePixels: minUpscaleSidePixels), let bigCG = big.cgImage {
+            append(bigCG, .up)
         }
 
-        if let hi = highContrastMonoBitmap(flat), let hiCG = hi.cgImage {
-            out.append(VisionVariant(cgImage: hiCG, orientation: .up))
+        for mono in [highContrastMonoBitmap(flat), sharpenedMonoBitmap(flat)] {
+            if let mono, let cg = mono.cgImage {
+                append(cg, .up)
+            }
         }
 
         if minSide < minUpscaleSidePixels,
-           let big = upscaledBitmap(flat, minSidePixels: minUpscaleSidePixels),
-           let hi = highContrastMonoBitmap(big),
-           let hiCG = hi.cgImage {
-            out.append(VisionVariant(cgImage: hiCG, orientation: .up))
+           let big = upscaledBitmap(flat, minSidePixels: minUpscaleSidePixels) {
+            for mono in [highContrastMonoBitmap(big), sharpenedMonoBitmap(big)] {
+                if let mono, let cg = mono.cgImage {
+                    append(cg, .up)
+                }
+            }
+        }
+
+        // Core Image QR detector + optional crop-to-code retries.
+        for crop in coreImageCroppedVariants(from: flat) {
+            if let cg = crop.cgImage {
+                append(cg, .up)
+            }
         }
 
         return out
     }
 
-    private static func decodeQRPayload(cgImage: CGImage, orientation: CGImagePropertyOrientation) -> String? {
+    private static func decodeAllQRPayloads(
+        cgImage: CGImage,
+        orientation: CGImagePropertyOrientation
+    ) -> [String] {
+        var results: [String] = []
+
         let request = VNDetectBarcodesRequest()
         request.symbologies = [.qr]
         request.revision = preferredBarcodeRevision()
 
         let handler = VNImageRequestHandler(cgImage: cgImage, orientation: orientation, options: [:])
-        do {
-            try handler.perform([request])
-        } catch {
+        if (try? handler.perform([request])) != nil {
+            let observations = (request.results ?? []).compactMap { $0 as? VNBarcodeObservation }
+                .filter { $0.symbology == .qr }
+                .sorted { $0.confidence > $1.confidence }
+            for obs in observations {
+                if let payload = obs.payloadStringValue {
+                    results.append(payload)
+                }
+            }
+        }
+
+        let ciImage = CIImage(cgImage: cgImage)
+        let detector = CIDetector(
+            ofType: CIDetectorTypeQRCode,
+            context: ciContext,
+            options: [CIDetectorAccuracy: CIDetectorAccuracyHigh]
+        )
+        let features = detector?.features(in: ciImage) as? [CIQRCodeFeature] ?? []
+        for feature in features {
+            if let message = feature.messageString {
+                results.append(message)
+            }
+        }
+
+        return results
+    }
+
+    private static func coreImageCroppedVariants(from image: UIImage) -> [UIImage] {
+        guard let ciImage = CIImage(image: image) else { return [] }
+        let detector = CIDetector(
+            ofType: CIDetectorTypeQRCode,
+            context: ciContext,
+            options: [CIDetectorAccuracy: CIDetectorAccuracyHigh]
+        )
+        guard let features = detector?.features(in: ciImage) as? [CIQRCodeFeature], !features.isEmpty else {
+            return []
+        }
+
+        var crops: [UIImage] = []
+        let extent = ciImage.extent
+        for feature in features {
+            guard let crop = croppedImage(from: image, feature: feature, extent: extent) else { continue }
+            crops.append(crop)
+            if let padded = paddedCrop(crop, paddingFraction: 0.08) {
+                crops.append(padded)
+            }
+        }
+        return crops
+    }
+
+    private static func croppedImage(
+        from image: UIImage,
+        feature: CIQRCodeFeature,
+        extent: CGRect
+    ) -> UIImage? {
+        let points = [feature.topLeft, feature.topRight, feature.bottomRight, feature.bottomLeft]
+        let xs = points.map(\.x)
+        let ys = points.map(\.y)
+        guard let minX = xs.min(), let maxX = xs.max(), let minY = ys.min(), let maxY = ys.max() else {
             return nil
         }
 
-        let observations = (request.results ?? []).compactMap { $0 as? VNBarcodeObservation }
-            .filter { $0.symbology == .qr }
+        // CIImage space is bottom-left origin; UIImage drawing uses top-left.
+        let crop = CGRect(
+            x: minX,
+            y: extent.height - maxY,
+            width: maxX - minX,
+            height: maxY - minY
+        ).integral
 
-        guard let best = observations.max(by: { $0.confidence < $1.confidence }),
-              let payload = best.payloadStringValue
-        else {
-            return nil
+        guard crop.width > 8, crop.height > 8, let cg = image.cgImage,
+              let sliced = cg.cropping(to: crop)
+        else { return nil }
+
+        return UIImage(cgImage: sliced, scale: 1, orientation: .up)
+    }
+
+    private static func paddedCrop(_ image: UIImage, paddingFraction: CGFloat) -> UIImage? {
+        guard let cg = image.cgImage else { return nil }
+        let w = CGFloat(cg.width)
+        let h = CGFloat(cg.height)
+        let padX = w * paddingFraction
+        let padY = h * paddingFraction
+        let crop = CGRect(x: -padX, y: -padY, width: w + padX * 2, height: h + padY * 2)
+            .integral
+        let canvas = CGSize(width: crop.width, height: crop.height)
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = true
+        return UIGraphicsImageRenderer(size: canvas, format: format).image { ctx in
+            UIColor.white.setFill()
+            ctx.fill(CGRect(origin: .zero, size: canvas))
+            image.draw(in: CGRect(x: padX, y: padY, width: w, height: h))
         }
-        return payload
     }
 
     private static func preferredBarcodeRevision() -> Int {
@@ -151,11 +254,14 @@ enum QRImageVerifier {
 
     /// Draws through `UIImage` so pixel data matches what the user sees (fixes non-`.up` orientations).
     private static func orientationNormalizedUIImage(_ image: UIImage) -> UIImage {
-        if image.imageOrientation == .up { return image }
+        if image.imageOrientation == .up, image.scale == 1 { return image }
         let format = UIGraphicsImageRendererFormat()
-        format.scale = image.scale
+        format.scale = 1
+        format.opaque = true
         let renderer = UIGraphicsImageRenderer(size: image.size, format: format)
         return renderer.image { _ in
+            UIColor.white.setFill()
+            UIRectFill(CGRect(origin: .zero, size: image.size))
             image.draw(in: CGRect(origin: .zero, size: image.size))
         }
     }
@@ -173,9 +279,11 @@ enum QRImageVerifier {
         let nh = max(1, floor(h * scale))
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
-        format.opaque = false
+        format.opaque = true
         let renderer = UIGraphicsImageRenderer(size: CGSize(width: nw, height: nh), format: format)
         return renderer.image { _ in
+            UIColor.white.setFill()
+            UIRectFill(CGRect(x: 0, y: 0, width: nw, height: nh))
             image.draw(in: CGRect(x: 0, y: 0, width: nw, height: nh))
         }
     }
@@ -185,12 +293,32 @@ enum QRImageVerifier {
         guard let filter = CIFilter(name: "CIColorControls") else { return nil }
         filter.setValue(ciImage, forKey: kCIInputImageKey)
         filter.setValue(0.0, forKey: kCIInputSaturationKey)
-        filter.setValue(1.35, forKey: kCIInputContrastKey)
-        filter.setValue(0.03, forKey: kCIInputBrightnessKey)
-        guard let output = filter.outputImage else { return nil }
-        let extent = output.extent.integral
+        filter.setValue(1.55, forKey: kCIInputContrastKey)
+        filter.setValue(0.05, forKey: kCIInputBrightnessKey)
+        return bitmap(from: filter.outputImage)
+    }
+
+    private static func sharpenedMonoBitmap(_ image: UIImage) -> UIImage? {
+        guard var ciImage = CIImage(image: image) else { return nil }
+        if let controls = CIFilter(name: "CIColorControls") {
+            controls.setValue(ciImage, forKey: kCIInputImageKey)
+            controls.setValue(0.0, forKey: kCIInputSaturationKey)
+            controls.setValue(1.25, forKey: kCIInputContrastKey)
+            ciImage = controls.outputImage ?? ciImage
+        }
+        if let sharpen = CIFilter(name: "CISharpenLuminance") {
+            sharpen.setValue(ciImage, forKey: kCIInputImageKey)
+            sharpen.setValue(0.8, forKey: kCIInputSharpnessKey)
+            ciImage = sharpen.outputImage ?? ciImage
+        }
+        return bitmap(from: ciImage)
+    }
+
+    private static func bitmap(from ciImage: CIImage?) -> UIImage? {
+        guard let ciImage else { return nil }
+        let extent = ciImage.extent.integral
         guard extent.width > 0, extent.height > 0,
-              let cg = ciContext.createCGImage(output, from: extent)
+              let cg = ciContext.createCGImage(ciImage, from: extent)
         else { return nil }
         return UIImage(cgImage: cg, scale: 1, orientation: .up)
     }

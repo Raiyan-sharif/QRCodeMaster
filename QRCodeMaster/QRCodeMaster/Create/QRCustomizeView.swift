@@ -157,14 +157,17 @@ struct QRCustomizeView: View {
         }
         .onAppear {
             applySafetyRulesIfNeeded(triggeredByUser: false)
+            refreshScanAdjustMessage()
             regenerate()
         }
         .onChange(of: style)     { _, _ in
             applySafetyRulesIfNeeded(triggeredByUser: true)
+            refreshScanAdjustMessage()
             regenerate()
         }
         .onChange(of: logoImage) { _, _ in
             applySafetyRulesIfNeeded(triggeredByUser: true)
+            refreshScanAdjustMessage()
             regenerate()
         }
         .onChange(of: logoItem)  { _, new in loadLogo(new) }
@@ -936,27 +939,34 @@ struct QRCustomizeView: View {
         readabilityReport?.densePayload ?? (payload.count >= QRReadabilityAdvisor.densePayloadThreshold)
     }
 
+    private func refreshScanAdjustMessage() {
+        if QRReadabilityAdvisor.previewDiffersFromExport(
+            style: style,
+            payload: payload,
+            hasLogo: logoImage != nil
+        ) {
+            autoAdjustMessage = "Preview export follows QR scan rules (quiet zone, contrast, correction, and safer modules)."
+        } else if readabilityReport?.riskHigh == true {
+            autoAdjustMessage = "Readability risk detected. Use Verify QR or Apply Fix & Retry after saving."
+        } else {
+            autoAdjustMessage = nil
+        }
+    }
+
     private func applySafetyRulesIfNeeded(triggeredByUser: Bool) {
         let current = QRReadabilityAdvisor.analyze(payload: payload, style: style, hasLogo: logoImage != nil)
         readabilityReport = current
 
         // Respect direct user edits (especially color swatch taps) so selections
         // are not immediately reverted by automatic safe defaults.
-        guard !triggeredByUser else {
-            autoAdjustMessage = current.riskHigh
-                ? "Readability risk detected. Use Verify QR or Apply Fix & Retry after saving."
-                : nil
-            return
-        }
+        guard !triggeredByUser else { return }
 
         let safer = QRReadabilityAdvisor.applyingSafeDefaults(to: style, payload: payload, hasLogo: logoImage != nil)
         if safer != style {
             style = safer
             readabilityReport = QRReadabilityAdvisor.analyze(payload: payload, style: safer, hasLogo: logoImage != nil)
-            autoAdjustMessage = "Adjusted style for scan reliability (contrast, logo size, module shape, and underlay)."
-        } else if !(readabilityReport?.riskHigh ?? false) {
-            autoAdjustMessage = nil
         }
+        refreshScanAdjustMessage()
     }
 
     private func regenerate() {

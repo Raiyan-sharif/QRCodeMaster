@@ -9,13 +9,18 @@ import UIKit
 
 enum QRStyleRenderer {
     private static let context = CIContext(options: [.useSoftwareRenderer: false])
-    /// ISO guidance is 4 modules; smaller quiet zones often fail stricter decoders.
-    private static let defaultQuietZoneModules: Int = 4
 
-    /// Share of the export square used by the QR matrix when a template is active.
-    private static let templateQRRelativeSide: CGFloat = 0.68
-    /// Keep the QR modules slightly inset from the colored card background.
-    private static let qrInsetFromCardPerSide: CGFloat = 5
+    /// Shared layout constants (also used by `QRReadabilityAdvisor` preflight).
+    enum Layout {
+        static let exportPoints: CGFloat = 768
+        /// ISO / common decoder guidance: ≥4 light modules around the symbol.
+        static let quietZoneModules: Int = 4
+        /// Share of the export square used for the inner card when a template/brand is active.
+        static let templateQRRelativeSide: CGFloat = 0.68
+    }
+
+    private static let defaultQuietZoneModules: Int = Layout.quietZoneModules
+    private static let templateQRRelativeSide: CGFloat = Layout.templateQRRelativeSide
 
     // MARK: - Public
 
@@ -30,8 +35,14 @@ enum QRStyleRenderer {
         // DO NOT scale before matrix extraction — scaling makes count = outputPoints
         // instead of the real module count, which breaks the finder-region guard
         // and causes eye styles to be ignored entirely.
+        let scanOptions = QRReadabilityAdvisor.applyingSafeDefaults(
+            to: options,
+            payload: message,
+            hasLogo: logo != nil
+        )
+
         guard
-            let ci = QRGeneratorService.makeCIQRCode(message: message, correctionLevel: options.errorCorrection),
+            let ci = QRGeneratorService.makeCIQRCode(message: message, correctionLevel: scanOptions.errorCorrection),
             let tuple = QRGeneratorService.moduleMatrix(from: ci, context: context)
         else { return nil }
 
@@ -39,13 +50,13 @@ enum QRStyleRenderer {
         let n = tuple.count
         guard n > 0 else { return nil }
 
-        let fg = options.foregroundUIColor()
-        let bg = options.backgroundUIColor()
+        let fg = scanOptions.foregroundUIColor()
+        let bg = scanOptions.backgroundUIColor()
         // Decorative template (sunset, ocean…) — full-canvas. Independent of brand background.
-        let templateId  = options.backgroundTemplateId
+        let templateId  = scanOptions.backgroundTemplateId
         let hasTemplate = templateId.map { !$0.isEmpty && $0.lowercased() != "none" } ?? false
         // Brand colour background (brand_instagram…) — QR area only. Can coexist with decorative template.
-        let brandId     = options.brandBackgroundId
+        let brandId     = scanOptions.brandBackgroundId
         let hasBrand    = brandId.map { !$0.isEmpty && $0.lowercased() != "none" } ?? false
 
         let size = CGSize(width: outputPoints, height: outputPoints)
@@ -67,12 +78,23 @@ enum QRStyleRenderer {
         let usesCardLayout = hasTemplate || hasBrand
         if usesCardLayout {
             let side = min(bounds.width, bounds.height) * Self.templateQRRelativeSide
-            cardRect     = CGRect(x: bounds.midX - side / 2, y: bounds.midY - side / 2,
-                                  width: side, height: side)
-            // Make generated QR 10 px smaller than its background card (5 px per side).
-            qrRect       = cardRect.insetBy(dx: Self.qrInsetFromCardPerSide, dy: Self.qrInsetFromCardPerSide)
-            moduleScale  = qrRect.width / CGFloat(n)
-            matrixOrigin = qrRect.origin
+            cardRect = CGRect(x: bounds.midX - side / 2, y: bounds.midY - side / 2,
+                              width: side, height: side)
+            // Reserve a 4-module quiet zone inside the card (same rule as plain layout).
+            let quietZone = CGFloat(Self.defaultQuietZoneModules)
+            moduleScale = cardRect.width / (CGFloat(n) + quietZone * 2)
+            let matrixSide = CGFloat(n) * moduleScale
+            let symbolSide = matrixSide + quietZone * 2 * moduleScale
+            let symbolOrigin = CGPoint(
+                x: cardRect.midX - symbolSide / 2,
+                y: cardRect.midY - symbolSide / 2
+            )
+            matrixOrigin = CGPoint(
+                x: symbolOrigin.x + quietZone * moduleScale,
+                y: symbolOrigin.y + quietZone * moduleScale
+            )
+            qrRect = CGRect(x: matrixOrigin.x, y: matrixOrigin.y,
+                            width: matrixSide, height: matrixSide)
         } else {
             let quietZone   = Self.defaultQuietZoneModules         // modules of white border each side
             moduleScale     = outputPoints / CGFloat(n + quietZone * 2)
@@ -150,7 +172,7 @@ enum QRStyleRenderer {
         }
 
         // Optional readability underlay for noisy backgrounds.
-        if options.preferReadabilityUnderlay {
+        if scanOptions.preferReadabilityUnderlay {
             ctx.saveGState()
             let underlay = UIBezierPath(roundedRect: qrRect, cornerRadius: qrRect.width * 0.05)
             ctx.addPath(underlay.cgPath)
@@ -160,7 +182,7 @@ enum QRStyleRenderer {
             ctx.restoreGState()
         }
 
-        if let borderHex = options.outerBorderHex,
+        if let borderHex = scanOptions.outerBorderHex,
            let borderColor = UIColor(hex: borderHex) {
             ctx.saveGState()
             let strokeRect = qrRect.insetBy(dx: -moduleScale * 0.9, dy: -moduleScale * 0.9)
@@ -174,7 +196,7 @@ enum QRStyleRenderer {
 
         let logoBackdrop: UIColor = usesCardLayout ? UIColor.white.withAlphaComponent(0.9) : bg
 
-        let moduleDotImage = options.moduleDotPatternJPEG.flatMap { UIImage(data: $0) }
+        let moduleDotImage = scanOptions.moduleDotPatternJPEG.flatMap { UIImage(data: $0) }
 
         // ── Draw data modules — skip the three 7×7 finder regions entirely ───────
         for r in 0..<n {
@@ -191,7 +213,7 @@ enum QRStyleRenderer {
                     in: rect,
                     context: ctx,
                     color: fg,
-                    shape: options.moduleShape,
+                    shape: scanOptions.moduleShape,
                     patternImage: moduleDotImage,
                     qrRect: qrRect
                 )
@@ -206,12 +228,12 @@ enum QRStyleRenderer {
         ]
         for origin in finderOrigins {
             drawFinderPattern(at: origin, moduleScale: moduleScale,
-                              context: ctx, fg: fg, eye: options.eyeStyle)
+                              context: ctx, fg: fg, eye: scanOptions.eyeStyle)
         }
 
         // Logo overlay
         if let logo {
-            compositeLogo(logo, maxRelative: options.logoMaxRelativeSize, placementRect: qrRect, context: ctx, background: logoBackdrop)
+            compositeLogo(logo, maxRelative: scanOptions.logoMaxRelativeSize, placementRect: qrRect, context: ctx, background: logoBackdrop)
         }
 
         // Watermark
@@ -231,8 +253,8 @@ enum QRStyleRenderer {
         guard let composed = UIGraphicsGetImageFromCurrentImageContext()?.cgImage else { return nil }
         let ui = UIImage(cgImage: composed, scale: UIScreen.main.scale, orientation: .up)
 
-        let framed = applyFrameIfNeeded(to: ui, frameId: options.frameId, fg: fg)
-        return applyCaption(to: framed, options: options)
+        let framed = applyFrameIfNeeded(to: ui, frameId: scanOptions.frameId, fg: fg)
+        return applyCaption(to: framed, options: scanOptions)
     }
 
     // MARK: - Module drawing

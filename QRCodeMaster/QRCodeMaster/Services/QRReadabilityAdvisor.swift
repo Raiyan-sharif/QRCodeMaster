@@ -8,7 +8,7 @@ import Foundation
 import UIKit
 
 enum QRReadabilityAdvisor {
-    private static let minimumQuietZoneModules: Double = 4
+    private static let minimumQuietZoneModules: Double = Double(QRStyleRenderer.Layout.quietZoneModules)
     struct Report: Equatable, Sendable {
         let contrastRatio: Double
         let logoCoveragePercent: Double
@@ -21,22 +21,24 @@ enum QRReadabilityAdvisor {
     }
 
     static let densePayloadThreshold = 120
-    private static let outputPoints: CGFloat = 768
+    private static let outputPoints: CGFloat = QRStyleRenderer.Layout.exportPoints
     private static let context = CIContext(options: [.useSoftwareRenderer: false])
 
     static func analyze(payload: String, style: QRStyleOptions, hasLogo: Bool) -> Report {
         let moduleCount = estimatedModuleCount(payload: payload, correction: style.errorCorrection) ?? 33
-        let usesCardLayout = usesCardLayout(style: style)
-        let qrSide = usesCardLayout ? outputPoints * 0.72 : outputPoints
-        let modulePixels = max(0.1, qrSide / CGFloat(max(1, moduleCount)))
-        let quietZoneModules: Double = {
-            if usesCardLayout {
-                let margin = (outputPoints - qrSide) / 2
-                return Double(margin / modulePixels)
+        let usesCard = usesCardLayout(style: style)
+        let quietZone = CGFloat(QRStyleRenderer.Layout.quietZoneModules)
+        let matrixSide: CGFloat = {
+            if usesCard {
+                let cardSide = outputPoints * QRStyleRenderer.Layout.templateQRRelativeSide
+                let moduleScale = cardSide / (CGFloat(moduleCount) + quietZone * 2)
+                return CGFloat(moduleCount) * moduleScale
             }
-            // Plain layout renders with a fixed quiet zone around the matrix.
-            return minimumQuietZoneModules
+            let moduleScale = outputPoints / (CGFloat(moduleCount) + quietZone * 2)
+            return CGFloat(moduleCount) * moduleScale
         }()
+        let modulePixels = max(0.1, matrixSide / CGFloat(max(1, moduleCount)))
+        let quietZoneModules: Double = minimumQuietZoneModules
 
         let contrast = contrastRatio(foreground: style.foregroundUIColor(), background: style.backgroundUIColor())
         let logoCoveragePercent = hasLogo ? max(0, min(35, style.logoMaxRelativeSize * 100)) : 0
@@ -96,6 +98,23 @@ enum QRReadabilityAdvisor {
     static func applyingSafeDefaults(to style: QRStyleOptions, payload: String, hasLogo: Bool) -> QRStyleOptions {
         let report = analyze(payload: payload, style: style, hasLogo: hasLogo)
         var next = style
+
+        if hasLogo {
+            switch next.errorCorrection.uppercased() {
+            case "L", "M":
+                next.errorCorrection = "H"
+            case "Q" where report.logoCoveragePercent > 12:
+                next.errorCorrection = "H"
+            default:
+                break
+            }
+            next.logoMaxRelativeSize = min(next.logoMaxRelativeSize, 0.20)
+        }
+
+        if usesCardLayout(style: next) || next.brandBackgroundId != nil || next.backgroundTemplateId != nil {
+            next.preferReadabilityUnderlay = true
+        }
+
         if report.densePayload {
             next.errorCorrection = "H"
             next.moduleShape = .square
@@ -113,12 +132,27 @@ enum QRReadabilityAdvisor {
             if isRiskyShape(next.moduleShape) { next.moduleShape = .square }
             if isDecorativeEyeStyle(next.eyeStyle) { next.eyeStyle = .square }
             next.logoMaxRelativeSize = min(next.logoMaxRelativeSize, 0.18)
-            if next.errorCorrection == "L" || next.errorCorrection == "M" {
+            if next.errorCorrection == "L" || next.errorCorrection == "M" || next.errorCorrection == "Q" {
                 next.errorCorrection = "H"
             }
             next.preferReadabilityUnderlay = true
+            if next.moduleShape == .photoDots {
+                next.moduleShape = .square
+                next.moduleDotPatternJPEG = nil
+            }
         }
+
+        if report.modulePixels < 4 && !isRiskyShape(next.moduleShape) {
+            next.moduleShape = .square
+            next.eyeStyle = .square
+        }
+
         return next
+    }
+
+    /// True when export rendering will adjust options for scan reliability.
+    static func previewDiffersFromExport(style: QRStyleOptions, payload: String, hasLogo: Bool) -> Bool {
+        applyingSafeDefaults(to: style, payload: payload, hasLogo: hasLogo) != style
     }
 
     static func applyingFix(_ fix: FixAction, to style: QRStyleOptions) -> QRStyleOptions {
